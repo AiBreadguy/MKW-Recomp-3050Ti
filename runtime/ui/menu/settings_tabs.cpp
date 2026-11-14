@@ -6,6 +6,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include <SDL3/SDL.h>
+
 #include "imgui.h"
 #include "ui/menu/binds_page.h"
 #include "ui/menu/option_rows.h"
@@ -234,8 +236,13 @@ static void auto_set(void) {
     for (int i = 0; gi < 0 && i < g_gpu_n; i++)
         if (g_gpu_discrete[i]) gi = i;   // automatic: the first dedicated card, as the device pick prefers
     if (gi < 0 || gi >= g_gpu_n) gi = 0;
+    // the game's window when there is one (the in-game menu), else the primary display (the start screen has no game
+    // window: gfx_window_monitor_size says nothing there)
     int mw = 0, mh = 0;
-    if (!gfx_window_monitor_size(&mw, &mh)) mh = 1080;
+    if (!gfx_window_monitor_size(&mw, &mh)) {
+        const SDL_DisplayMode *m = SDL_GetCurrentDisplayMode(SDL_GetPrimaryDisplay());
+        mh = m ? (int)(m->h * m->pixel_density + 0.5f) : 1080;
+    }
     uint32_t mb = g_gpu_n > 0 ? g_gpu_vram_mb[gi] : 0;
     bool weak = g_gpu_n <= 0 || !g_gpu_discrete[gi] || mb < 6 * 1024, strong = !weak && mb >= 16 * 1024;
     const char *preset = weak ? "medium" : strong ? "high" : "console";
@@ -244,7 +251,7 @@ static void auto_set(void) {
     int res = kRes[0];
     for (int r : kRes)
         if (r <= want && r <= mh) res = r;
-    for (int k = 0; k < NAUTO; k++) {
+    for (int k = 0; k < NAUTO && !g_auto_done; k++) {   // pressed again, Undo still goes back to before the first
         const char *v = cfg_get(kAutoKeys[k]);
         snprintf(g_auto_before[k], sizeof g_auto_before[k], "%s", v ? v : "");
     }

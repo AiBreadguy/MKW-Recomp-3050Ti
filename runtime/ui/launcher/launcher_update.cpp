@@ -176,23 +176,35 @@ UpdateState update_state(void) {
 
 // The mark the next start reads (update_just_installed): the version now in place and the one it replaced, which that
 // start keeps for Undo (update.py clean --previous).
+// The small files of the update (its mark, a kept version's tag), through SDL: it takes the UTF-8 paths, which fopen
+// reads in the ANSI code page on Windows.
+static bool write_lines(const char *path, const char *a, const char *b) {
+    SDL_IOStream *io = SDL_IOFromFile(path, "wb");
+    if (!io) return false;
+    bool ok = SDL_IOprintf(io, "%s\n%s\n", a, b) > 0;
+    return SDL_CloseIO(io) && ok;
+}
+
+// The file's first two lines into a and b (b may be NULL); false when the file is not there.
+static bool read_lines(const char *path, char *a, size_t acap, char *b, size_t bcap) {
+    char *data = (char *)SDL_LoadFile(path, nullptr);
+    a[0] = 0;
+    if (b) b[0] = 0;
+    if (!data) return false;
+    size_t n = strcspn(data, "\r\n");
+    snprintf(a, acap, "%.*s", (int)n, data);
+    if (b) {
+        const char *s = data + n + strspn(data + n, "\r\n");
+        snprintf(b, bcap, "%.*s", (int)strcspn(s, "\r\n"), s);
+    }
+    SDL_free(data);
+    return true;
+}
+
 static bool write_mark(const char *exe_dir, const char *tag, const char *replaced) {
     char p[1200];
     snprintf(p, sizeof p, "%s/update-done", exe_dir);
-    FILE *f = fopen(p, "wb");
-    if (!f) return false;
-    fprintf(f, "%s\n%s\n", tag, replaced);
-    return fclose(f) == 0;
-}
-
-// A one-line file's line (a kept version's tag); "" when it is not there.
-static void read_line(const char *path, char *out, unsigned cap) {
-    out[0] = 0;
-    FILE *f = fopen(path, "rb");
-    if (!f) return;
-    if (!fgets(out, (int)cap, f)) out[0] = 0;
-    fclose(f);
-    out[strcspn(out, "\r\n")] = 0;
+    return write_lines(p, tag, replaced);
 }
 
 #ifdef _WIN32
@@ -281,16 +293,17 @@ int update_apply(const char *exe_dir) {
         set_state(fail, "not started from the AppImage");
         return 0;
     }
+    // the running AppImage is renamed to be kept for Undo (a rename, not a copy: instant, and Linux runs a renamed
+    // file on), then the new one takes its name; on a failure the old one gets it back
     char kept[1200], kept_tag[1200];
     kept_appimage(app, kept, kept_tag, sizeof kept);
-    if (SDL_CopyFile(app, kept)) {   // Undo's copy; without it the update still goes in
-        FILE *f = fopen(kept_tag, "wb");
-        if (f) fprintf(f, "%s\n", rt_port_version), fclose(f);
-    }
+    bool keep = SDL_RenamePath(app, kept);
     if (!SDL_RenamePath(s.path, app)) {
         set_state(fail, SDL_GetError());
+        if (keep) SDL_RenamePath(kept, app);
         return 0;
     }
+    if (keep) write_lines(kept_tag, rt_port_version, "");
     SDL_RemovePath(g_dest);
 #endif
     write_mark(exe_dir, s.tag, rt_port_version);
@@ -309,7 +322,7 @@ int update_previous(const char *exe_dir, char *tag, unsigned cap) {
     kept_appimage(app, kept, p, sizeof p);
     if (!plat_file_exists(kept)) return tag[0] = 0, 0;
 #endif
-    read_line(p, tag, cap);
+    read_lines(p, tag, cap, nullptr, 0);
     return tag[0] != 0;
 }
 
@@ -331,8 +344,7 @@ int update_revert(const char *exe_dir, char *why, unsigned cap) {
         if (!plat_file_exists(app)) SDL_RenamePath(plat_file_exists(next) ? next : kept, app);
         return 0;
     }
-    FILE *f = fopen(kept_tag, "wb");
-    if (f) fprintf(f, "%s\n", rt_port_version), fclose(f);
+    write_lines(kept_tag, rt_port_version, "");
 #endif
     write_mark(exe_dir, tag, rt_port_version);   // as an update: the next start sets up again what differs
     rt_log("update: back to %s, starting it", tag);
@@ -360,20 +372,9 @@ void update_relaunch(const char *exe_dir) {
 int update_just_installed(const char *exe_dir, char *tag, unsigned cap) {
     char p[1200];
     snprintf(p, sizeof p, "%s/update-done", exe_dir);
-    FILE *f = fopen(p, "rb");
-    if (!f) return 0;
-    tag[0] = 0;
-    if (!fgets(tag, (int)cap, f)) tag[0] = 0;
-    fclose(f);
-    tag[strcspn(tag, "\r\n")] = 0;
-    char replaced[96] = "";   // the version the update replaced: its *.old files are kept for Undo
-    FILE *m = fopen(p, "rb");
-    if (m) {
-        char skip[96];
-        if (fgets(skip, sizeof skip, m) && fgets(replaced, sizeof replaced, m)) replaced[strcspn(replaced, "\r\n")] = 0;
-        fclose(m);
-    }
-    remove(p);
+    char replaced[96];   // the version the update replaced: its *.old files are kept for Undo
+    if (!read_lines(p, tag, cap, replaced, sizeof replaced)) return 0;
+    SDL_RemovePath(p);
     char python[1200], script[1200];
     if (find_tools(exe_dir, python, script, sizeof python)) {   // the *.old files: nobody waits for it
         const char *args[] = {python, "-I",   script, "clean", "--game", exe_dir, replaced[0] ? "--previous" : nullptr,

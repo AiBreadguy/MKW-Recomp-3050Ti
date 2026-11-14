@@ -27,7 +27,7 @@
 // is in the log); MKW_LAUNCHER_SHOT then takes its shot without quitting. During a shot the update check runs only
 // with MKW_UPDATE_AS (tools/prepare/update.py: compare as that version). MKW_LAUNCHER_UPDATE=1 takes the update offered
 // at once, as its button does; MKW_LAUNCHER_BACKUP=1 and MKW_LAUNCHER_UNDO=1 press the Tools page's Back up and Undo
-// update once (Undo without its confirmation). The last run's notice (launcher_lastrun.h) is read during a shot only with
+// update once (Undo confirmed too; MKW_LAUNCHER_UNDO=ask leaves its dialog open, for a shot). The last run's notice (launcher_lastrun.h) is read during a shot only with
 // MKW_LAUNCHER_LASTRUN=1.
 #include <SDL3/SDL.h>
 #include <ctype.h>
@@ -1432,6 +1432,7 @@ static void page_tools(float w, float h) {
     launcher_player_dir(player, sizeof player);
     snprintf(backups, sizeof backups, "%s/backups", cfg_game_dir());
     static char report_note[200], undo_tag[96], undo_why[400];
+    static bool undo_test = getenv("MKW_LAUNCHER_UNDO") != nullptr;   // (test) once, as the button does
     ImGui::PushTextWrapPos(0);
     ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, ImVec2(8 * s, 6 * s));   // rows apart, as the settings rows are
     if (ImGui::BeginTable("##tools", 2, ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_PadOuterX)) {
@@ -1509,10 +1510,8 @@ static void page_tools(float w, float h) {
             else snprintf(note, sizeof note, "%s", menu_text(UI_TOOLS_UNDO_NOTE));
             tools_row(text, note, undo_why[0] != 0);
             ImGui::BeginDisabled(u.phase == UPDATE_FETCHING || setup_state().running);
-            if (ImGui::Button(menu_text(UI_TOOLS_UNDO), ImVec2(0, act_h))) {
-                snprintf(undo_tag, sizeof undo_tag, "%s", kept);
-                ImGui::OpenPopup("##undo");
-            }
+            if (ImGui::Button(menu_text(UI_TOOLS_UNDO), ImVec2(0, act_h)) || undo_test)
+                snprintf(undo_tag, sizeof undo_tag, "%s", kept);   // the dialog opens after the table (below)
             ImGui::EndDisabled();
         }
 
@@ -1538,10 +1537,12 @@ static void page_tools(float w, float h) {
     ImGui::PopTextWrapPos();
     ImVec2 vp = ImGui::GetMainViewport()->Pos, vs = ImGui::GetMainViewport()->Size;
     ImGui::SetNextWindowPos(ImVec2(vp.x + vs.x * 0.5f, vp.y + vs.y * 0.5f), ImGuiCond_Always, ImVec2(0.5f, 0.5f));
-    static bool undo_test = getenv("MKW_LAUNCHER_UNDO") != nullptr;   // (test) once, as the confirmed button does
-    if (undo_test) snprintf(undo_tag, sizeof undo_tag, "test");
-    if (confirm_modal("##undo", undo_tag, sizeof undo_tag, UI_TOOLS_UNDO_ASK, UI_TOOLS_UNDO) || undo_test) {
-        undo_test = false;
+    // opened here, in the window's ID scope where confirm_modal looks for it: inside the table it named another popup
+    if (undo_tag[0] && !ImGui::IsPopupOpen("##undo")) ImGui::OpenPopup("##undo");
+    bool undo_confirmed = undo_test && undo_tag[0];   // (test) MKW_LAUNCHER_UNDO=1 confirms too; =ask leaves it open
+    if (undo_confirmed && !strcmp(getenv("MKW_LAUNCHER_UNDO"), "ask")) undo_confirmed = false;
+    undo_test = false;
+    if (confirm_modal("##undo", undo_tag, sizeof undo_tag, UI_TOOLS_UNDO_ASK, UI_TOOLS_UNDO) || undo_confirmed) {
         if (update_revert(L.exe_dir, undo_why, sizeof undo_why)) L.relaunch = 1, L.result = LAUNCHER_QUIT;
         undo_tag[0] = 0;
     }
