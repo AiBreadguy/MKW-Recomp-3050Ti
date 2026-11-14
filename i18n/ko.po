@@ -2148,7 +2148,7 @@ msgstr ""
 
 #. Under Play when no controller is connected.
 msgctxt "UI_LAUNCH_PAD_NONE"
-msgid "No controller: keyboard and mouse work"
+msgid "No controller connected"
 msgstr ""
 
 #. On the controller row: opens the Controls tab.
