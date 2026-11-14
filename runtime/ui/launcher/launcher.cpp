@@ -1,5 +1,6 @@
 // The start screen, shown before the game: Play and the profile, the controllers, Settings, Game files, Mods and Quit,
-// the update offered, the game files' state at the lower left. The player's build (build.py --dist) always starts here; Play starts the process again
+// the update offered, the game files' state at the lower left; Tools for saves, shortcuts, updates and problems. The
+// player's build (build.py --dist) always starts here; Play starts the process again
 // with the launcher skipped (main.c), so the game claims its address space in a fresh process. build/mkw shows it only
 // with --launcher.
 //
@@ -11,7 +12,7 @@
 // 5173d27, MIT, Copyright (c) 2026 Revivedx and the Savage Wind Recomp contributors).
 //
 // Test hooks: MKW_LAUNCHER_SHOT=<frame>[:<page>[:<tab>[:<scroll 0..1>]]] saves that frame as MKW_LAUNCHER_SHOT_OUT (default
-// launcher.png) and quits; page main, settings (tab 0..6), files, mods or players. The user's input is ignored while it
+// launcher.png) and quits; page main, settings (tab 0..6), files, mods, players or tools. The user's input is ignored while it
 // runs.
 // MKW_LAUNCHER_SETUP=<folder>[:link] starts the setup from that folder at once, on the game files page.
 // MKW_LAUNCHER_MODS_PICK=<zip|folder> picks it on the Mods page, as its dialogs do; MKW_LAUNCHER_MODS_TOGGLE=<mod>
@@ -25,7 +26,8 @@
 // MKW_LAUNCHER_EXIT_AFTER_SETUP=1 quits when that setup ends, after saving the page as <shot out>-end.png (its result
 // is in the log); MKW_LAUNCHER_SHOT then takes its shot without quitting. During a shot the update check runs only
 // with MKW_UPDATE_AS (tools/prepare/update.py: compare as that version). MKW_LAUNCHER_UPDATE=1 takes the update offered
-// at once, as its button does. The last run's notice (launcher_lastrun.h) is read during a shot only with
+// at once, as its button does; MKW_LAUNCHER_BACKUP=1 and MKW_LAUNCHER_UNDO=1 press the Tools page's Back up and Undo
+// update once (Undo without its confirmation). The last run's notice (launcher_lastrun.h) is read during a shot only with
 // MKW_LAUNCHER_LASTRUN=1.
 #include <SDL3/SDL.h>
 #include <ctype.h>
@@ -44,6 +46,7 @@
 #include "ui/launcher/launcher_look.h"
 #include "ui/launcher/launcher_players.h"
 #include "ui/launcher/launcher_setup.h"
+#include "ui/launcher/launcher_tools.h"
 #include "ui/launcher/launcher_lastrun.h"
 #include "ui/launcher/launcher_update.h"
 #include "ui/launcher/mods.h"
@@ -56,13 +59,14 @@ extern "C" {
 #include "cfg.h"
 #include "gamelib.h"
 #include "platform/platform.h"
+#include "sysinfo.h"
 #include "ui_text.h"
 void rt_log(const char *fmt, ...) __attribute__((format(printf, 1, 2)));
 extern const char rt_port_version[];
 void app_icon_set(SDL_Window *w);   // build/obj/rt/app_icon.c, drawn by tools/build/icon.py
 }
 
-enum Page { PAGE_MAIN, PAGE_SETTINGS, PAGE_FILES, PAGE_MODS, PAGE_PLAYERS };
+enum Page { PAGE_MAIN, PAGE_SETTINGS, PAGE_FILES, PAGE_MODS, PAGE_PLAYERS, PAGE_TOOLS };
 
 static struct {
     SDL_Window *win;
@@ -207,6 +211,7 @@ static void parse_test(void) {
     L.shot_page = !strncmp(p, "settings", 8) ? PAGE_SETTINGS : !strncmp(p, "files", 5) ? PAGE_FILES
                   : !strncmp(p, "mods", 4)                                              ? PAGE_MODS
                   : !strncmp(p, "players", 7)                                           ? PAGE_PLAYERS
+                  : !strncmp(p, "tools", 5)                                             ? PAGE_TOOLS
                                                                                         : PAGE_MAIN;
     const char *t = strchr(p, ':');
     L.shot_tab = t ? atoi(t + 1) : 0;
@@ -479,7 +484,7 @@ static void update_card(float w) {
 }
 
 // After the game is set up, once: the desktop shortcut offered on the main page until it is made or put off. The
-// button stays on the Game files page; MKW_SHORTCUT_ASKED (no settings row, like MKW_PLAYER) keeps the answer.
+// button stays on the Tools page; MKW_SHORTCUT_ASKED (no settings row, like MKW_PLAYER) keeps the answer.
 static bool shortcut_asked(void) {
     const char *v = cfg_get("MKW_SHORTCUT_ASKED");
     return v && *v && strcmp(v, "0");
@@ -564,7 +569,8 @@ static bool status_link(bool ready) {
 }
 
 // The main page: a column on the left with the title, Play with the profile beside it, the controllers, then Settings,
-// Game files and Mods, Quit last and apart, and once after setup the desktop shortcut; the update at the upper right;
+// Game files, Mods and Tools, Quit last and apart, and once after setup the desktop shortcut; the update at the upper
+// right;
 // the game files' state at the lower left, the version and the keys at the lower right. One window over the whole page,
 // so the controller's cursor reaches the update's buttons from the column. The picture is the background's
 // (launcher_backdrop.cpp): the player's splash.png, or the logo's flag.
@@ -574,7 +580,7 @@ static void page_main(float w, float h) {
     // the column's height, to centre it: logo and title, the gap, Play, the controllers, the menu, the gap and Quit
     float mark = 84 * s, items = item_height(), gap = 12 * s;
     float play_h = fmaxf(52.0f, 76 * s), pad_h = fmaxf(36.0f, 48 * s);
-    float col_h = mark + 48 * s + play_h + gap + pad_h + gap + items * 3 + 28 * s + items;
+    float col_h = mark + 48 * s + play_h + gap + pad_h + gap + items * 4 + 28 * s + items;
     ImGui::SetNextWindowPos(ImVec2(0, 0));
     ImGui::SetNextWindowSize(ImVec2(w, h));
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
@@ -642,10 +648,13 @@ static void page_main(float w, float h) {
     v0 = dl->VtxBuffer.Size;
     if (menu_item(menu_text(UI_LAUNCH_MODS), cw, true)) L.page = PAGE_MODS;
     intro_apply(dl, v0, intro(5));
+    v0 = dl->VtxBuffer.Size;
+    if (menu_item(menu_text(UI_LAUNCH_TOOLS), cw, true)) L.page = PAGE_TOOLS;
+    intro_apply(dl, v0, intro(6));
     ImGui::Dummy(ImVec2(0, 28 * s));
     v0 = dl->VtxBuffer.Size;
     if (menu_item(menu_text(UI_LAUNCH_QUIT), cw, true)) L.result = LAUNCHER_QUIT;
-    intro_apply(dl, v0, intro(6));
+    intro_apply(dl, v0, intro(7));
     ImGui::PopStyleVar();
     v0 = dl->VtxBuffer.Size;
     if (files && !shortcut_asked()) {
@@ -951,7 +960,7 @@ static void setup_steps(const SetupState &st, bool ready, float act_h) {
 }
 
 // Set up: what is installed, as a card (the game version, the port version that set it up, how the RomFS is kept, the
-// copy it came from and the game folder), with the folder's buttons and the desktop shortcut.
+// copy it came from and the game folder), with the folder's buttons.
 static void files_summary(const SetupState &st, float act_h) {
     char port[64];
     snprintf(port, sizeof port, "MKW Recomp %s", L.setup_port);
@@ -981,10 +990,7 @@ static void files_summary(const SetupState &st, float act_h) {
     if (ImGui::Button(menu_text(UI_LAUNCH_OPEN_FOLDER), ImVec2(0, act_h))) plat_open_folder(cfg_game_dir());
     ImGui::SameLine();
     game_dir_button(st, act_h);
-    ImGui::SameLine();
-    if (ImGui::Button(menu_text(UI_LAUNCH_SHORTCUT), ImVec2(0, act_h))) make_shortcut();
     game_dir_notes();
-    if (L.shortcut_note[0]) ImGui::TextColored(col4(LOOK_DIM), "%s", L.shortcut_note);
     card_end(LOOK_LINE, LOOK_ROW);
 }
 
@@ -1387,6 +1393,165 @@ static void page_mods(float w, float h) {
     go_main();
 }
 
+// ---- the Tools page: the player's saves, the shortcuts, the updates (with Undo) and reporting a problem
+enum { JOB_BACKUP = 1, JOB_STEAM };
+
+// A heading over a group of the Tools page's rows, in a row of its own.
+static void tools_group(UiTextId title) {
+    ImGui::TableNextRow();
+    ImGui::TableNextColumn();
+    ImGui::Dummy(ImVec2(0, 10 * L.scale));
+    ImGui::TextColored(col4(LOOK_HEADING), "%s", menu_text(title));
+    ImGui::TableNextColumn();
+}
+
+// A row: its name and, under it in the dim colour (the warning colour for a failure), what it does or what it did; the
+// caller's buttons follow in the right column.
+static void tools_row(const char *label, const char *note, bool bad = false) {
+    ImGui::TableNextRow();
+    ImGui::TableNextColumn();
+    ImGui::TextUnformatted(label);
+    if (note && *note) ImGui::TextColored(col4(bad ? LOOK_WARN : LOOK_DIM), "%s", note);
+    ImGui::TableNextColumn();
+}
+
+// The program the shortcuts start: the AppImage on Linux (its AppRun's copy of mkw needs the AppImage's libraries).
+static bool shortcut_target(char *exe, size_t cap) {
+    const char *appimage = getenv("APPIMAGE");
+    if (appimage && *appimage && strlen(appimage) < cap) return snprintf(exe, cap, "%s", appimage), true;
+    return plat_exe_path(exe, cap);
+}
+
+static void page_tools(float w, float h) {
+    float s = L.scale, act_h = item_height();
+    float bottom = panel_begin("##tools", UI_LAUNCH_TOOLS, w, h);
+    ImGui::BeginChild("##tools_body", ImVec2(0, -bottom), ImGuiChildFlags_NavFlattened);
+    ToolState job = tool_state();
+    bool busy = job.phase == TOOL_RUNNING;
+    char note[800], text[300], player[PLAT_PATH_MAX * 2], backups[PLAT_PATH_MAX + 16];
+    launcher_player_dir(player, sizeof player);
+    snprintf(backups, sizeof backups, "%s/backups", cfg_game_dir());
+    static char report_note[200], undo_tag[96], undo_why[400];
+    ImGui::PushTextWrapPos(0);
+    ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, ImVec2(8 * s, 6 * s));   // rows apart, as the settings rows are
+    if (ImGui::BeginTable("##tools", 2, ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_PadOuterX)) {
+        ImGui::TableSetupColumn("", ImGuiTableColumnFlags_WidthStretch);
+        ImGui::TableSetupColumn("", ImGuiTableColumnFlags_WidthFixed);
+
+        tools_group(UI_TOOLS_SAVES);
+        bool done = job.job == JOB_BACKUP && job.phase == TOOL_DONE, failed = job.job == JOB_BACKUP && job.phase == TOOL_FAILED;
+        if (done) {   // the zip's name: Open backups shows where
+            const char *z = job.line + strlen(job.line);
+            while (z > job.line && z[-1] != '/' && z[-1] != '\\') z--;
+            snprintf(note, sizeof note, menu_text(UI_TOOLS_BACKUP_DONE), z);
+        }
+        else if (failed) snprintf(note, sizeof note, menu_text(UI_TOOLS_FAILED), job.line);
+        else snprintf(note, sizeof note, menu_text(UI_TOOLS_BACKUP_NOTE), launcher_player_name());
+        tools_row(menu_text(UI_TOOLS_BACKUP), note, failed);
+        ImGui::BeginDisabled(busy || !player[0]);
+        static bool backup_test = getenv("MKW_LAUNCHER_BACKUP") != nullptr;   // (test) once, as the button does
+        if (ImGui::Button(menu_text(UI_TOOLS_BACKUP_BUTTON), ImVec2(0, act_h)) || (backup_test && player[0])) {
+            backup_test = false;
+            const char *args[] = {"backup", "--profile", player, "--dest", backups, "--name", launcher_player_name(), nullptr};
+            tool_start(L.exe_dir, JOB_BACKUP, "prepare/saves.py", args);
+        }
+        ImGui::EndDisabled();
+        tools_row(menu_text(UI_TOOLS_SAVES_FOLDERS), nullptr);
+        ImGui::BeginDisabled(!player[0]);
+        if (ImGui::Button(menu_text(UI_TOOLS_OPEN_SAVES), ImVec2(0, act_h))) plat_open_folder(player);
+        ImGui::EndDisabled();
+        ImGui::SameLine();
+        if (ImGui::Button(menu_text(UI_TOOLS_OPEN_BACKUPS), ImVec2(0, act_h))) {
+            SDL_CreateDirectory(backups);
+            plat_open_folder(backups);
+        }
+
+        tools_group(UI_TOOLS_SHORTCUTS);
+        tools_row(menu_text(UI_LAUNCH_SHORTCUT), L.shortcut_note);
+        if (ImGui::Button(menu_text(UI_LAUNCH_SHORTCUT_MAKE), ImVec2(0, act_h))) make_shortcut();
+        done = job.job == JOB_STEAM && job.phase == TOOL_DONE, failed = job.job == JOB_STEAM && job.phase == TOOL_FAILED;
+        int users = 0, running = 0;
+        if (done && sscanf(job.line, "%d %d", &users, &running) == 2)
+            snprintf(note, sizeof note, "%s", menu_text(running ? UI_TOOLS_STEAM_RESTART : UI_TOOLS_STEAM_DONE));
+        else if (failed)
+            snprintf(note, sizeof note, menu_text(UI_TOOLS_FAILED),
+                     !strncmp(job.line, "nosteam", 7) ? menu_text(UI_TOOLS_STEAM_NONE) : job.line);
+        else snprintf(note, sizeof note, "%s", menu_text(UI_TOOLS_STEAM_NOTE));
+        tools_row(menu_text(UI_TOOLS_STEAM), note, failed);
+        ImGui::BeginDisabled(busy);
+        if (ImGui::Button(menu_text(UI_TOOLS_ADD), ImVec2(0, act_h))) {
+            char exe[PLAT_PATH_MAX * 2];
+            if (shortcut_target(exe, sizeof exe)) {
+                const char *args[] = {"add", "--name", "Mario Kart World", "--exe", exe, "--dir", L.exe_dir, nullptr};
+                tool_start(L.exe_dir, JOB_STEAM, "prepare/steam.py", args);
+            }
+        }
+        ImGui::EndDisabled();
+
+        tools_group(UI_TOOLS_UPDATES);
+        UpdateState u = update_state();
+        snprintf(text, sizeof text, menu_text(UI_TOOLS_VERSION), rt_port_version);
+        if (u.phase == UPDATE_OFFER || u.phase == UPDATE_FETCHING) snprintf(note, sizeof note, menu_text(UI_LAUNCH_UPDATE_TITLE), u.tag);
+        else snprintf(note, sizeof note, "%s", u.phase == UPDATE_CHECKING ? menu_text(UI_TOOLS_CHECKING) : "");
+        tools_row(text, note);
+        if (ImGui::Button(menu_text(UI_LAUNCH_WHATS_NEW), ImVec2(0, act_h))) {
+            snprintf(note, sizeof note, "https://github.com/%s/releases", repo());
+            SDL_OpenURL(note);
+        }
+        ImGui::SameLine();
+        ImGui::BeginDisabled(u.phase == UPDATE_CHECKING || u.phase == UPDATE_FETCHING);
+        if (ImGui::Button(menu_text(UI_TOOLS_CHECK), ImVec2(0, act_h))) update_check_start(L.exe_dir);
+        ImGui::EndDisabled();
+        char kept[96];
+        if (update_previous(L.exe_dir, kept, sizeof kept)) {
+            snprintf(text, sizeof text, menu_text(UI_TOOLS_UNDO_ROW), kept);
+            if (undo_why[0]) snprintf(note, sizeof note, menu_text(UI_TOOLS_FAILED), undo_why);
+            else snprintf(note, sizeof note, "%s", menu_text(UI_TOOLS_UNDO_NOTE));
+            tools_row(text, note, undo_why[0] != 0);
+            ImGui::BeginDisabled(u.phase == UPDATE_FETCHING || setup_state().running);
+            if (ImGui::Button(menu_text(UI_TOOLS_UNDO), ImVec2(0, act_h))) {
+                snprintf(undo_tag, sizeof undo_tag, "%s", kept);
+                ImGui::OpenPopup("##undo");
+            }
+            ImGui::EndDisabled();
+        }
+
+        tools_group(UI_TOOLS_PROBLEMS);
+        tools_row(menu_text(UI_TOOLS_REPORT), report_note[0] ? report_note : menu_text(UI_TOOLS_REPORT_NOTE));
+        if (ImGui::Button(menu_text(UI_TOOLS_REPORT_BUTTON), ImVec2(0, act_h))) {
+            // what a bug report needs, on the clipboard to paste into the form the button opens
+            static char info[16384];
+            bool copied = sysinfo_text(info, sizeof info) > 0 && plat_clipboard_set(info);
+            snprintf(report_note, sizeof report_note, "%s",
+                     menu_text(copied ? UI_TOOLS_REPORT_COPIED : UI_MENU_ACTION_FAILED));
+            snprintf(note, sizeof note, "https://github.com/%s/issues/new?template=bug_report.yml", repo());
+            SDL_OpenURL(note);
+        }
+        tools_row(menu_text(UI_TOOLS_LOGS), nullptr);
+        if (ImGui::Button(menu_text(UI_MENU_OPEN_LOG), ImVec2(0, act_h))) {
+            char dir[PLAT_PATH_MAX];
+            if (sysinfo_log_folder(dir, sizeof dir)) plat_open_folder(dir);
+        }
+        ImGui::EndTable();
+    }
+    ImGui::PopStyleVar();
+    ImGui::PopTextWrapPos();
+    ImVec2 vp = ImGui::GetMainViewport()->Pos, vs = ImGui::GetMainViewport()->Size;
+    ImGui::SetNextWindowPos(ImVec2(vp.x + vs.x * 0.5f, vp.y + vs.y * 0.5f), ImGuiCond_Always, ImVec2(0.5f, 0.5f));
+    static bool undo_test = getenv("MKW_LAUNCHER_UNDO") != nullptr;   // (test) once, as the confirmed button does
+    if (undo_test) snprintf(undo_tag, sizeof undo_tag, "test");
+    if (confirm_modal("##undo", undo_tag, sizeof undo_tag, UI_TOOLS_UNDO_ASK, UI_TOOLS_UNDO) || undo_test) {
+        undo_test = false;
+        if (update_revert(L.exe_dir, undo_why, sizeof undo_why)) L.relaunch = 1, L.result = LAUNCHER_QUIT;
+        undo_tag[0] = 0;
+    }
+    ImGui::EndChild();
+    bool leave = panel_back_row();
+    if (!ImGui::IsPopupOpen("", ImGuiPopupFlags_AnyPopupId) && back_pressed()) leave = true;
+    ImGui::End();
+    if (leave) go_main();
+}
+
 // ---- the window
 static bool open_window(void) {
     // MKW_BACKGROUND_WINDOW=1 (agents' shots, never the player's default): the runs' app id, which the KWin rule opens
@@ -1567,6 +1732,7 @@ extern "C" int launcher_run(void) {
         case PAGE_FILES: page_files((float)pw, (float)ph); break;
         case PAGE_MODS: page_mods((float)pw, (float)ph); break;
         case PAGE_PLAYERS: page_players((float)pw, (float)ph); break;
+        case PAGE_TOOLS: page_tools((float)pw, (float)ph); break;
         }
         // the page just switched to comes in from its own colour in 0.15 s, over everything drawn this frame
         if (L.page_t0 > 0 && !launcher_fade(ImGui::GetForegroundDrawList(), (float)pw, (float)ph,

@@ -28,6 +28,8 @@ void rt_log(const char *fmt, ...) __attribute__((format(printf, 1, 2)));
 enum { MAX_GPUS = 8 };
 static char g_gpu_names[MAX_GPUS][VK_MAX_PHYSICAL_DEVICE_NAME_SIZE];
 static int g_gpu_n = -1;   // -1: not listed yet
+static uint32_t g_gpu_vram_mb[MAX_GPUS];   // the largest device-local heap, for Auto-set
+static bool g_gpu_discrete[MAX_GPUS];
 
 // The Vulkan devices in vkEnumeratePhysicalDevices order, which MKW_GPU_INDEX counts in (vk_device.c pick_device).
 void settings_list_gpus(VkInstance inst) {
@@ -39,6 +41,14 @@ void settings_list_gpus(VkInstance inst) {
         VkPhysicalDeviceProperties p;
         vkGetPhysicalDeviceProperties(pd[i], &p);
         snprintf(g_gpu_names[i], sizeof g_gpu_names[i], "%s", p.deviceName);
+        VkPhysicalDeviceMemoryProperties mp;
+        vkGetPhysicalDeviceMemoryProperties(pd[i], &mp);
+        uint64_t vram = 0;
+        for (uint32_t h = 0; h < mp.memoryHeapCount; h++)
+            if (mp.memoryHeaps[h].flags & VK_MEMORY_HEAP_DEVICE_LOCAL_BIT && mp.memoryHeaps[h].size > vram)
+                vram = mp.memoryHeaps[h].size;
+        g_gpu_vram_mb[i] = (uint32_t)(vram >> 20);
+        g_gpu_discrete[i] = p.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU;
     }
     g_gpu_n = (int)n;
 }
@@ -207,10 +217,67 @@ static void row_quality(void) {
             for (int k = 0; k < 4; k++) cfg_set(kQualityKeys[k], kPresets[p].v[k]);
 }
 
+// Auto-set: the preset, the internal resolution and AMD FSR 1 from the graphics card in use and the screen, only when
+// the player asks (the defaults stay the console's). A first guess from the cards in the README's table, like the
+// presets: no dedicated card or under 6 GB (GTX 1050 Ti, 1650 SUPER, RTX 3050 Laptop: 22-37 fps at 720-1080p) Medium
+// at 720p; under 16 GB (RTX 3060: ~48 fps at 1080p) Console at 1080p; above (RX 7900 XTX: 60 fps at 2160p) High at the
+// screen's height. Never above the screen. Undo puts back what it changed.
+static const char *const kAutoKeys[] = {"MKW_QUALITY",         "MKW_ANISO",       "MKW_TEX_QUALITY", "MKW_DETAIL_DISTANCE",
+                                        "MKW_SHADOW_SIZE", "MKW_RESOLUTION", "MKW_UPSCALER"};
+enum { NAUTO = sizeof kAutoKeys / sizeof *kAutoKeys };
+static char g_auto_before[NAUTO][32];   // the rows' values before Auto-set ("" unset)
+static bool g_auto_done;
+
+static void auto_set(void) {
+    const char *pick = cfg_get("MKW_GPU_INDEX");
+    int gi = pick && *pick ? atoi(pick) : -1;
+    for (int i = 0; gi < 0 && i < g_gpu_n; i++)
+        if (g_gpu_discrete[i]) gi = i;   // automatic: the first dedicated card, as the device pick prefers
+    if (gi < 0 || gi >= g_gpu_n) gi = 0;
+    int mw = 0, mh = 0;
+    if (!gfx_window_monitor_size(&mw, &mh)) mh = 1080;
+    uint32_t mb = g_gpu_n > 0 ? g_gpu_vram_mb[gi] : 0;
+    bool weak = g_gpu_n <= 0 || !g_gpu_discrete[gi] || mb < 6 * 1024, strong = !weak && mb >= 16 * 1024;
+    const char *preset = weak ? "medium" : strong ? "high" : "console";
+    int want = weak ? 720 : strong ? mh : 1080;
+    static const int kRes[] = {540, 720, 900, 1080, 1440, 2160};
+    int res = kRes[0];
+    for (int r : kRes)
+        if (r <= want && r <= mh) res = r;
+    for (int k = 0; k < NAUTO; k++) {
+        const char *v = cfg_get(kAutoKeys[k]);
+        snprintf(g_auto_before[k], sizeof g_auto_before[k], "%s", v ? v : "");
+    }
+    for (int p = 0; p < NPRESETS; p++)
+        if (!strcmp(kPresets[p].name, preset))
+            for (int k = 0; k < 4; k++) cfg_set(kQualityKeys[k], kPresets[p].v[k]);
+    char r[8];
+    snprintf(r, sizeof r, "%d", res);
+    cfg_set("MKW_QUALITY", preset);
+    cfg_set("MKW_RESOLUTION", r);
+    cfg_set("MKW_UPSCALER", "fsr");
+    g_auto_done = true;
+    opt_save_soon();
+    rt_log("menu: auto-set for %s (%u MB, %s), screen %d lines: %s at %dp", g_gpu_n > 0 ? g_gpu_names[gi] : "no device",
+           mb, weak ? "light" : strong ? "strong" : "middle", mh, preset, res);
+}
+
+static void auto_undo(void) {
+    for (int k = 0; k < NAUTO; k++) {
+        if (g_auto_before[k][0]) cfg_set(kAutoKeys[k], g_auto_before[k]);
+        else cfg_reset(&kAutoKeys[k], 1);
+    }
+    g_auto_done = false;
+    opt_save_soon();
+}
+
 // What the graphics card draws and how much, each row the console's by default: the preset first with the four rows it
 // sets hanging under it, then the resolution, then how fast frames come.
 static void tab_graphics(float scale) {
     opt_begin("##graphics", scale);
+    static bool auto_test = getenv("MKW_LAUNCHER_AUTOSET") != nullptr;   // (test) once, as the button does
+    if (opt_button("##autoset", UI_MENU_AUTOSET, UI_MENU_AUTOSET_DESC) || auto_test) auto_set(), auto_test = false;
+    if (g_auto_done && opt_button("##autoset_undo", UI_MENU_AUTOSET_UNDO, UI_MENU_AUTOSET_UNDO_DESC)) auto_undo();
     row_quality();
     opt_indent(true);
     {   // a floor on anisotropic filtering (gfx/vk/tex/vk_tex_slots.c make_sampler)
