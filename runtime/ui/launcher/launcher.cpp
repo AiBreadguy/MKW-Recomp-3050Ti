@@ -108,14 +108,18 @@ static void exe_dir(char *out, size_t cap) {
 }
 
 // The last setup's record (tools/prepare/prepare.py), NUL-terminated in buf; false when there is none.
+// plat_file_read takes the UTF-8 path: fopen reads it in the ANSI code page on Windows, so a game folder with an accent
+// in its name had no record.
 static bool read_setup_state(char *buf, size_t cap) {
     char path[PLAT_PATH_MAX * 3];
     snprintf(path, sizeof path, "%s/setup-state.json", cfg_game_dir());
-    FILE *f = fopen(path, "rb");
-    if (!f) return false;
-    size_t n = fread(buf, 1, cap - 1, f);
-    fclose(f);
+    uint64_t size = 0;
+    uint8_t *data = plat_file_read(path, &size);
+    if (!data) return false;
+    size_t n = size < cap - 1 ? (size_t)size : cap - 1;
+    memcpy(buf, data, n);
     buf[n] = 0;
+    free(data);
     return true;
 }
 
