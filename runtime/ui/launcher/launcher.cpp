@@ -90,7 +90,8 @@ static struct {
     int link_romfs;                 // 0 copy it into the game folder, 1 use it where it is
     int tools;                      // the setup tools are there
     char shortcut_note[1200];       // what the shortcut button did
-    char game_version[32];          // the game version the last setup installed; "" unknown (read_game_version)
+    // the last setup's record (read_setup_info): the game version, the port version, the copy and how its RomFS is kept
+    char game_version[32], setup_port[48], setup_source[1024], setup_mode[8];
     int pads;                       // the gamepads SDL sees, and the first one's name (pads_refresh)
     char pad_name[128];
     char updated[96];               // the release the previous run installed (launcher_update.h)
@@ -134,13 +135,37 @@ static int setup_from_other_version(void) {
     return !strstr(buf, want);
 }
 
-// The game version the last setup installed: its compile step's key is "<build id> <version> ...". Read when a page is
-// shown, not every frame.
-static void read_game_version(void) {
+// A string of the setup's record: the first "key": "..." with its escapes (\\, \") undone; "" when absent.
+static void json_str(const char *buf, const char *key, char *out, size_t cap) {
+    char pat[64];
+    snprintf(pat, sizeof pat, "\"%s\": \"", key);
+    const char *p = strstr(buf, pat);
+    size_t n = 0;
+    if (p)
+        for (p += strlen(pat); *p && *p != '"' && n + 1 < cap; p++) {
+            if (*p == '\\' && p[1]) p++;
+            out[n++] = *p;
+        }
+    out[n] = 0;
+}
+
+// What the last setup installed: the game version (its compile step's key is "<build id> <version> ..."), the port
+// version, the player's copy and how its RomFS is kept. The copy and the mode fill the setup's steps when the player
+// has not chosen others, so setting up again needs no new pick. Read when a page is shown, not every frame.
+static void read_setup_info(void) {
     static char buf[16384];
-    L.game_version[0] = 0;
-    const char *p = read_setup_state(buf, sizeof buf) ? strstr(buf, "\"compile\": \"") : nullptr;
-    if (p) sscanf(p + 12, "%*s %31[0-9.]", L.game_version);
+    char compile[160];
+    L.game_version[0] = L.setup_port[0] = L.setup_source[0] = L.setup_mode[0] = 0;
+    if (!read_setup_state(buf, sizeof buf)) return;
+    json_str(buf, "compile", compile, sizeof compile);
+    sscanf(compile, "%*s %31[0-9.]", L.game_version);
+    json_str(buf, "port", L.setup_port, sizeof L.setup_port);
+    json_str(buf, "source", L.setup_source, sizeof L.setup_source);
+    json_str(buf, "romfs_mode", L.setup_mode, sizeof L.setup_mode);
+    if (!L.source[0] && L.setup_source[0]) {
+        snprintf(L.source, sizeof L.source, "%s", L.setup_source);
+        L.link_romfs = !strcmp(L.setup_mode, "link");
+    }
 }
 
 // The gamepads SDL sees: their count and the first one's name. Called at start and when one is connected or removed.
@@ -809,6 +834,181 @@ static void setup_progress(const SetupState &st) {
     }
 }
 
+// The indent of a step's contents, past its number.
+static float step_indent(void) { return ImGui::GetTextLineHeight() * 1.24f + 14 * L.scale; }
+
+// A numbered step's heading: its number in a ring (a tick in a green disc once done) and its title; what follows is
+// indented under the title until step_end.
+static void step_head(int n, bool done, const char *title) {
+    float s = L.scale, lh = ImGui::GetTextLineHeight(), r = lh * 0.62f;
+    ImVec2 p = ImGui::GetCursorScreenPos(), c(p.x + r, p.y + lh * 0.5f);
+    ImDrawList *dl = ImGui::GetWindowDrawList();
+    if (done) {
+        step_mark(dl, c, r, true, false);
+    } else {
+        char d[4];
+        snprintf(d, sizeof d, "%d", n);
+        ImVec2 ds = ImGui::CalcTextSize(d);
+        dl->AddCircle(c, r - s, LOOK_ACCENT_HOT, 28, 2 * s);
+        dl->AddText(ImVec2(c.x - ds.x * 0.5f, c.y - ds.y * 0.5f), LOOK_TEXT, d);
+    }
+    ImGui::SetCursorScreenPos(ImVec2(p.x + step_indent(), p.y));
+    ImGui::TextUnformatted(title);
+    ImGui::Indent(step_indent());
+}
+
+static void step_end(void) {
+    ImGui::Unindent(step_indent());
+    ImGui::Dummy(ImVec2(0, 10 * L.scale));
+}
+
+// One way to keep the RomFS, as a card: a ring with a dot when chosen, its name and what it costs. true: picked.
+static bool romfs_card(const char *id, bool on, UiTextId title, UiTextId note, float w) {
+    float s = L.scale, lh = ImGui::GetTextLineHeight(), pad = 12 * s, r = lh * 0.42f;
+    float tx = pad + r * 2 + 10 * s, wrap = w - tx - pad;
+    const char *t = menu_text(title), *n = menu_text(note);
+    float nh = ImGui::CalcTextSize(n, nullptr, false, wrap).y, hgt = pad * 2 + lh + 4 * s + nh;
+    ImVec2 a = ImGui::GetCursorScreenPos(), b(a.x + w, a.y + hgt);
+    Hot h = hot_button(id, ImVec2(w, hgt));
+    ImDrawList *dl = ImGui::GetWindowDrawList();
+    dl->AddRectFilled(a, b, on ? with_alpha(LOOK_ACCENT, 34) : mix(LOOK_ROW, LOOK_ROW_HOT, h.t), 4 * s);
+    dl->AddRect(a, b, on ? LOOK_ACCENT_HOT : LOOK_LINE, 4 * s, 0, on ? 2 * s : s);
+    if (h.cursor) focus_ring(a, b);
+    ImVec2 c(a.x + pad + r, a.y + pad + lh * 0.5f);
+    dl->AddCircle(c, r, on ? LOOK_ACCENT_HOT : LOOK_DIM, 20, 2 * s);
+    if (on) dl->AddCircleFilled(c, r * 0.45f, LOOK_ACCENT_HOT, 16);
+    dl->AddText(ImVec2(a.x + tx, a.y + pad), LOOK_TEXT, t);
+    dl->AddText(ImGui::GetFont(), ImGui::GetFontSize(), ImVec2(a.x + tx, a.y + pad + lh + 4 * s), LOOK_HEADING, n, nullptr,
+                wrap);
+    return h.hit;
+}
+
+// Where the game is installed: Choose game folder (the launcher reopens with it), then under the buttons why the folder
+// chosen cannot be used and that the environment fixes it.
+static void game_dir_button(const SetupState &st, float act_h) {
+    ImGui::BeginDisabled(st.running || update_state().phase == UPDATE_FETCHING || cfg_from_env("MKW_GAME_DIR"));
+    if (ImGui::Button(menu_text(UI_LAUNCH_PICK_GAME_DIR), ImVec2(0, act_h))) {
+        L.picking = 1;
+        SDL_ShowOpenFolderDialog(picked, &L.directory_restart, L.win, cfg_game_dir(), false);
+    }
+    ImGui::EndDisabled();
+}
+
+static void game_dir_notes(void) {
+    if (cfg_from_env("MKW_GAME_DIR")) ImGui::TextDisabled("%s MKW_GAME_DIR", menu_text(UI_MENU_SET_BY_ENV));
+    if (cfg_game_dir_invalid()) {
+        ImGui::PushTextWrapPos(0);
+#ifdef _WIN32
+        ImGui::TextColored(col4(LOOK_BAD), menu_text(UI_LAUNCH_GAME_DIR_INVALID_WIN32), CFG_GAME_DIR_WIN32_MAX);
+#else
+        ImGui::TextColored(col4(LOOK_BAD), menu_text(UI_LAUNCH_GAME_DIR_INVALID), CFG_GAME_DIR_MAX);
+#endif
+        ImGui::PopTextWrapPos();
+    }
+}
+
+// The setup's three steps: the player's copy, how its RomFS is kept, then Set up with the folder it installs to.
+static void setup_steps(const SetupState &st, bool ready, float act_h) {
+    float s = L.scale;
+    ImGui::BeginDisabled(st.running);
+    step_head(1, L.source[0] != 0, menu_text(UI_LAUNCH_SOURCE));
+    ImGui::TextColored(col4(L.source[0] ? LOOK_TEXT : LOOK_DIM), "%s",
+                       L.source[0] ? L.source : menu_text(UI_LAUNCH_NO_SOURCE));
+    if (ImGui::Button(menu_text(UI_LAUNCH_PICK), ImVec2(0, act_h))) {
+        L.picking = 1;
+        SDL_ShowOpenFolderDialog(picked, nullptr, L.win, nullptr, false);
+    }
+    ImGui::SameLine();
+    static const SDL_DialogFileFilter kPack[] = {{"Switch 2 package (.nup, .nx)", "nup;nx"}};
+    if (ImGui::Button(menu_text(UI_LAUNCH_PICK_NUP), ImVec2(0, act_h))) {   // the dump as one file (runtime/sdk/fs/pack.h)
+        L.picking = 1;
+        SDL_ShowOpenFileDialog(picked, nullptr, L.win, kPack, 1, nullptr, false);
+    }
+    step_end();
+    step_head(2, false, menu_text(UI_LAUNCH_ROMFS_MODE));
+    float cw = fminf((ImGui::GetContentRegionAvail().x - 12 * s) * 0.5f, 440 * s);
+    if (romfs_card("##copy", !L.link_romfs, UI_LAUNCH_ROMFS_COPY, UI_LAUNCH_ROMFS_COPY_NOTE, cw)) L.link_romfs = 0;
+    ImGui::SameLine(0, 12 * s);
+    if (romfs_card("##link", L.link_romfs, UI_LAUNCH_ROMFS_LINK, UI_LAUNCH_ROMFS_LINK_NOTE, cw)) L.link_romfs = 1;
+    step_end();
+    step_head(3, false, menu_text(UI_LAUNCH_SETUP));
+    ImGui::BeginDisabled(!L.source[0]);
+    if (accent_button(menu_text(ready ? UI_LAUNCH_SETUP_AGAIN : UI_LAUNCH_SETUP), ImVec2(0, act_h)))
+        setup_start(L.exe_dir, cfg_game_dir(), L.source, L.link_romfs);
+    ImGui::EndDisabled();
+    char to[PLAT_PATH_MAX + 64];
+    snprintf(to, sizeof to, menu_text(UI_LAUNCH_INSTALLS_TO), cfg_game_dir());
+    ImGui::PushTextWrapPos(0);
+    ImGui::TextColored(col4(LOOK_HEADING), "%s", to);
+    ImGui::PopTextWrapPos();
+    if (!ready) {   // set up, the folder changes from the summary's buttons
+        game_dir_button(st, act_h);
+        game_dir_notes();
+        ImGui::TextWrapped("%s", menu_text(UI_LAUNCH_GAME_DIR_HELP));
+    }
+    step_end();
+    ImGui::EndDisabled();
+}
+
+// Set up: what is installed, as a card (the game version, the port version that set it up, how the RomFS is kept, the
+// copy it came from and the game folder), with the folder's buttons and the desktop shortcut.
+static void files_summary(const SetupState &st, float act_h) {
+    char port[64];
+    snprintf(port, sizeof port, "MKW Recomp %s", L.setup_port);
+    const struct {
+        UiTextId label;
+        const char *value;
+    } rows[] = {
+        {UI_LAUNCH_INFO_VERSION, L.game_version},
+        {UI_LAUNCH_INFO_PORT, L.setup_port[0] ? port : ""},
+        {UI_LAUNCH_INFO_ROMFS, !L.setup_mode[0]                  ? ""
+                               : !strcmp(L.setup_mode, "link") ? menu_text(UI_LAUNCH_ROMFS_LINKED)
+                                                                 : menu_text(UI_LAUNCH_ROMFS_COPIED)},
+        {UI_LAUNCH_SOURCE, L.setup_source},
+        {UI_LAUNCH_FILES_FOLDER, cfg_game_dir()},
+    };
+    float lw = 0;
+    for (const auto &r : rows) lw = fmaxf(lw, ImGui::CalcTextSize(menu_text(r.label)).x);
+    card_begin(fminf(ImGui::GetContentRegionAvail().x, 1100 * L.scale));
+    float x = lw + 24 * L.scale;   // SameLine measures from the group's left edge
+    for (const auto &r : rows) {
+        if (!r.value[0]) continue;   // a record from an older setup lacks some
+        ImGui::TextColored(col4(LOOK_DIM), "%s", menu_text(r.label));
+        ImGui::SameLine(x);
+        ImGui::TextUnformatted(r.value);
+    }
+    ImGui::Dummy(ImVec2(0, 4 * L.scale));
+    if (ImGui::Button(menu_text(UI_LAUNCH_OPEN_FOLDER), ImVec2(0, act_h))) plat_open_folder(cfg_game_dir());
+    ImGui::SameLine();
+    game_dir_button(st, act_h);
+    ImGui::SameLine();
+    if (ImGui::Button(menu_text(UI_LAUNCH_SHORTCUT), ImVec2(0, act_h))) make_shortcut();
+    game_dir_notes();
+    if (L.shortcut_note[0]) ImGui::TextColored(col4(LOOK_DIM), "%s", L.shortcut_note);
+    card_end(LOOK_LINE, LOOK_ROW);
+}
+
+// A failed setup, in red where the eye lands first: why, Try again (prepare.py keeps the steps already done) and the
+// log folder (logs/setup.log has the tools' whole messages).
+static void setup_failed_card(const SetupState &st) {
+    char msg[700];
+    setup_error_text(st, msg, sizeof msg);
+    card_begin(fminf(ImGui::GetContentRegionAvail().x, 1100 * L.scale));
+    ImGui::TextColored(col4(LOOK_BAD), "%s", msg);
+    if (accent_button(menu_text(UI_LAUNCH_RETRY)))
+        setup_start(L.exe_dir, cfg_game_dir(), L.source[0] ? L.source : nullptr, L.link_romfs);
+    ImGui::SameLine();
+    if (ImGui::Button(menu_text(UI_MENU_OPEN_LOG))) {
+        char logs[PLAT_PATH_MAX + 16];
+        snprintf(logs, sizeof logs, "%s/logs", cfg_game_dir());
+        plat_open_folder(logs);
+    }
+    card_end(LOOK_BAD, with_alpha(LOOK_BAD, 22));
+}
+
+// The game files page. Not set up: what the setup needs and its three steps, which is the start screen then. Set up:
+// what is installed, and the steps folded under Set up again. A setup under way or finished shows its steps' progress
+// first, a failed one its reason with Try again above them.
 static void page_files(float w, float h) {
     const float act_h = item_height();   // the page's buttons: a target easy to hit, as the main page's
     float bottom = panel_begin("##files", UI_LAUNCH_FILES, w, h);
@@ -825,99 +1025,39 @@ static void page_files(float w, float h) {
         snprintf(note, sizeof note, menu_text(UI_LAUNCH_UPDATED), L.updated);
         ImGui::TextColored(col4(LOOK_OK), "%s", note);
     }
-    // a line of some 75 letters at most: wider, the eye loses its place on the way back
-    ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + fminf(ImGui::GetContentRegionAvail().x, 940 * L.scale));
-    ImGui::TextUnformatted(menu_text(UI_LAUNCH_FILES_HELP));
-    ImGui::PopTextWrapPos();
-    ImGui::Spacing();
-    ImGui::TextDisabled("%s", menu_text(UI_LAUNCH_FILES_FOLDER));
-    ImGui::SameLine();
-    ImGui::TextWrapped("%s", cfg_game_dir());
-    ImGui::BeginDisabled(st.running || update_state().phase == UPDATE_FETCHING || cfg_from_env("MKW_GAME_DIR"));
-    if (ImGui::Button(menu_text(UI_LAUNCH_PICK_GAME_DIR), ImVec2(0, act_h))) {
-        L.picking = 1;
-        SDL_ShowOpenFolderDialog(picked, &L.directory_restart, L.win, cfg_game_dir(), false);
-    }
-    ImGui::EndDisabled();
-    ImGui::SameLine();
-    if (ImGui::Button(menu_text(UI_LAUNCH_SHORTCUT), ImVec2(0, act_h))) make_shortcut();
-    if (L.shortcut_note[0]) ImGui::TextColored(col4(LOOK_DIM), "%s", L.shortcut_note);
-    ImGui::TextWrapped("%s", menu_text(UI_LAUNCH_GAME_DIR_HELP));
-    if (cfg_from_env("MKW_GAME_DIR"))
-        ImGui::TextDisabled("%s MKW_GAME_DIR", menu_text(UI_MENU_SET_BY_ENV));
-    if (cfg_game_dir_invalid()) {
-        ImGui::PushTextWrapPos(0);
-#ifdef _WIN32
-        ImGui::TextColored(col4(LOOK_BAD), menu_text(UI_LAUNCH_GAME_DIR_INVALID_WIN32), CFG_GAME_DIR_WIN32_MAX);
-#else
-        ImGui::TextColored(col4(LOOK_BAD), menu_text(UI_LAUNCH_GAME_DIR_INVALID), CFG_GAME_DIR_MAX);
-#endif
-        ImGui::PopTextWrapPos();
-    }
     if (!cfg_last_save_ok()) ImGui::TextColored(col4(LOOK_BAD), "%s", menu_text(UI_MENU_SAVE_FAILED));
-    // the groups apart: more space between them than inside one
-    ImGui::Dummy(ImVec2(0, 8 * L.scale));
-    ImGui::Separator();
-    ImGui::Dummy(ImVec2(0, 8 * L.scale));
+    ImGui::Dummy(ImVec2(0, 4 * L.scale));
+    if (st.finished < 0) setup_failed_card(st);
+    if (st.finished > 0) ImGui::TextColored(col4(LOOK_OK), "%s", menu_text(UI_LAUNCH_SETUP_DONE));
+    if (st.running || st.finished) {
+        setup_progress(st);
+        if (st.running && ImGui::Button(menu_text(UI_LAUNCH_CANCEL), ImVec2(0, act_h))) setup_cancel();
+        ImGui::Dummy(ImVec2(0, 8 * L.scale));
+    }
+    if (ready) files_summary(st, act_h);
     if (!L.tools) {
         ImGui::TextWrapped("%s", menu_text(UI_LAUNCH_NO_TOOLS));
-    } else {
-        ImGui::BeginDisabled(st.running);
-        ImGui::TextDisabled("%s", menu_text(UI_LAUNCH_SOURCE));
-        ImGui::SameLine();
-        ImGui::TextUnformatted(L.source[0] ? L.source : "-");
-        if (ImGui::Button(menu_text(UI_LAUNCH_PICK), ImVec2(0, act_h))) {
-            L.picking = 1;
-            SDL_ShowOpenFolderDialog(picked, nullptr, L.win, nullptr, false);
-        }
-        ImGui::SameLine();
-        static const SDL_DialogFileFilter kPack[] = {{"Switch 2 package (.nup, .nx)", "nup;nx"}};
-        if (ImGui::Button(menu_text(UI_LAUNCH_PICK_NUP), ImVec2(0, act_h))) {   // the dump as one file (runtime/sdk/fs/pack.h)
-            L.picking = 1;
-            SDL_ShowOpenFileDialog(picked, nullptr, L.win, kPack, 1, nullptr, false);
-        }
+    } else if (ready) {
         ImGui::Dummy(ImVec2(0, 8 * L.scale));
-        ImGui::TextDisabled("%s", menu_text(UI_LAUNCH_ROMFS_MODE));
-        // a ring with a red dot in the chosen one: ImGui's own is a filled disc, which reads as a blank button
-        ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 2 * L.scale);
-        ImGui::PushStyleVar(ImGuiStyleVar_ItemInnerSpacing, ImVec2(10 * L.scale, 0));
-        ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(0, 0, 0, 0));
-        ImGui::PushStyleColor(ImGuiCol_Border, col4(LOOK_DIM));
-        ImGui::RadioButton(menu_text(UI_LAUNCH_ROMFS_COPY), &L.link_romfs, 0);
-        ImGui::SameLine(0, 28 * L.scale);
-        ImGui::RadioButton(menu_text(UI_LAUNCH_ROMFS_LINK), &L.link_romfs, 1);
-        ImGui::PopStyleColor(2);
-        ImGui::PopStyleVar(2);
-        ImGui::BeginDisabled(!L.source[0]);
-        // the page's main action, in the blue: until the game is set up there is nothing else to do here
-        if (accent_button(menu_text(ready ? UI_LAUNCH_SETUP_AGAIN : UI_LAUNCH_SETUP), ImVec2(0, act_h)))
-            setup_start(L.exe_dir, cfg_game_dir(), L.source, L.link_romfs);
-        ImGui::EndDisabled();
-        ImGui::EndDisabled();
-        if (st.running) {
-            ImGui::SameLine();
-            if (ImGui::Button(menu_text(UI_LAUNCH_CANCEL), ImVec2(0, act_h))) setup_cancel();
+        if (st.running || st.finished) ImGui::SetNextItemOpen(true, ImGuiCond_Always);   // its steps stay in view
+        if (ImGui::CollapsingHeader(menu_text(UI_LAUNCH_SETUP_AGAIN))) {
+            ImGui::TextColored(col4(LOOK_HEADING), "%s", menu_text(UI_LAUNCH_SETUP_AGAIN_HINT));
+            ImGui::Dummy(ImVec2(0, 6 * L.scale));
+            setup_steps(st, ready, act_h);
         }
-        // the result right under Set up, by the button that started it: after the step list it would be under the
-        // fold of a 720-line window, and a failed setup would seem to have done nothing
-        if (st.finished > 0) ImGui::TextColored(col4(LOOK_OK), "%s", menu_text(UI_LAUNCH_SETUP_DONE));
-        if (st.finished < 0) {
-            char msg[700];
-            setup_error_text(st, msg, sizeof msg);
-            ImGui::PushTextWrapPos(0);
-            ImGui::TextColored(col4(LOOK_BAD), "%s", msg);
-            ImGui::PopTextWrapPos();
-        }
-        if (st.running || st.finished) {
-            ImGui::Dummy(ImVec2(0, 12 * L.scale));
-            setup_progress(st);
-        }
+    } else {
+        // a line of some 75 letters at most: wider, the eye loses its place on the way back
+        ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + fminf(ImGui::GetContentRegionAvail().x, 940 * L.scale));
+        ImGui::TextUnformatted(menu_text(UI_LAUNCH_FILES_HELP));
+        ImGui::PopTextWrapPos();
+        ImGui::Dummy(ImVec2(0, 8 * L.scale));
+        setup_steps(st, ready, act_h);
     }
     ImGui::EndDisabled();
     ImGui::EndChild();
     // Not set up: this page is the start screen (decided 06/11/2026), its bottom button quits; set up, it goes back.
-    // While the setup runs the button takes no input: one click would throw away minutes of work. Cancel, next to Set
-    // up, is the way to stop it on purpose.
+    // While the setup runs the button takes no input: one click would throw away minutes of work. Cancel, under the
+    // steps, is the way to stop it on purpose.
     ImGui::BeginDisabled(st.running || L.picking);
     bool leave = panel_back_row(ready ? UI_LAUNCH_BACK : UI_LAUNCH_QUIT);
     ImGui::EndDisabled();
@@ -1418,7 +1558,7 @@ extern "C" int launcher_run(void) {
             launcher_fade(bgl, (float)pw, (float)ph, LOOK_BG, L.intro_t0, 0.8f);
         if (L.page != L.shown || frame == 1) {
             if (frame > 1 && !L.shot_at) L.page_t0 = ImGui::GetTime();
-            read_game_version();   // a setup may have changed the game files meanwhile
+            read_setup_info();   // a setup may have changed the game files meanwhile
             L.shown = L.page;
         }
         switch (L.page) {
