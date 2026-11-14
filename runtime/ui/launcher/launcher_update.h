@@ -15,7 +15,7 @@ typedef struct {
 } UpdateState;
 
 void update_check_start(const char *exe_dir);   // at start: nothing unless MKW_UPDATE_CHECK and a packaged install
-void update_fetch_start(const char *exe_dir);   // the offered release, once UPDATE_OFFER
+void update_fetch_start(const char *exe_dir);   // the offered release, once UPDATE_OFFER (or again after its failure)
 UpdateState update_state(void);                 // a copy, any time
 // UPDATE_READY: the new files in place of the old ones (renamed to *.old, removed at the next start). 1: done, start the
 // program again with update_relaunch once the window is gone; 0: nothing changed, the error is in the state.

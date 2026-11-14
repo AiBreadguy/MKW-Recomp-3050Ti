@@ -204,7 +204,11 @@ typedef enum {
     UI_GB_UNSAFE, UI_GB_PAGE, UI_GB_ERROR, UI_MOD_WARN_GRAPHICS, UI_MOD_WARN_SHADERS, UI_MOD_CODE_REBUILD, UI_MOD_RISK, UI_MOD_RISK_ACK,
     // the update (ui/launcher/launcher_update.cpp): UPDATE "... %s ... %d MB" (tag, size), FETCHING "... %s" (tag),
     // FAILED "... %s" (why), UPDATED "... %s" (tag); the Menu tab's switch
-    UI_LAUNCH_UPDATE, UI_LAUNCH_UPDATE_FETCHING, UI_LAUNCH_UPDATE_FAILED, UI_LAUNCH_UPDATED,
+    UI_LAUNCH_UPDATE_FETCHING, UI_LAUNCH_UPDATE_FAILED, UI_LAUNCH_UPDATED,
+    // the update card (TITLE: the release; DETAIL: the version in use and the download's MB) and the main page's rows
+    UI_LAUNCH_UPDATE_TITLE, UI_LAUNCH_UPDATE_DETAIL, UI_LAUNCH_UPDATE_NOW, UI_LAUNCH_WHATS_NEW, UI_LAUNCH_RETRY,
+    UI_LAUNCH_FILES_READY_AS, UI_LAUNCH_PAD, UI_LAUNCH_PAD_NONE, UI_LAUNCH_CONFIGURE, UI_LAUNCH_SHORTCUT_ASK,
+    UI_LAUNCH_SHORTCUT_MAKE, UI_LAUNCH_NOT_NOW, UI_LAUNCH_KEYS,
     UI_LAUNCH_NO_GAME_DATA,   // the start screen's lower right: the player brings the game, the port ships none
     // the last run's end (ui/launcher/launcher_lastrun.cpp): KNOWN "... #%d ..." (issue), FIXED "... %s ..." (tag),
     // OPEN "... #%d" (issue): the buttons open the issue or the bug form
@@ -213,7 +217,7 @@ typedef enum {
     UI_MENU_UPDATE_CHECK, UI_MENU_UPDATE_CHECK_DESC,
     // the Profiles page (ui/launcher/launcher_players.cpp): PLAYER "...: %s" (the main page's row, the name),
     // CONFIRM "... %s ..." (the name)
-    UI_LAUNCH_PLAYERS, UI_LAUNCH_PLAYER, UI_PLAYER_NOTE, UI_PLAYER_NAME_HINT, UI_PLAYER_CHOOSE, UI_PLAYER_CHOSEN,
+    UI_LAUNCH_PLAYERS, UI_PLAYER_NOTE, UI_PLAYER_NAME_HINT, UI_PLAYER_CHOOSE, UI_PLAYER_CHOSEN,
     UI_PLAYER_NEW, UI_PLAYER_REMOVE, UI_PLAYER_CONFIRM, UI_PLAYER_FAILED,
     UI_MENU_LAST_ID = UI_PLAYER_FAILED,
     UI_TEXT_COUNT

@@ -2127,11 +2127,6 @@ msgid ""
 msgstr "แทนที่เชเดอร์: พอร์ตแปลเชเดอร์ของเกมระหว่างการตั้งค่า ม็อดนี้จึงอาจไม่แสดงหรือทำให้ภาพเสีย"
 
 #. printf format: keep every %... conversion, in the same order.
-msgctxt "UI_LAUNCH_UPDATE"
-msgid "Update to %s (%d MB)"
-msgstr "อัปเดตเป็น %s (%d MB)"
-
-#. printf format: keep every %... conversion, in the same order.
 msgctxt "UI_LAUNCH_UPDATE_FETCHING"
 msgid "Downloading %s"
 msgstr "กำลังดาวน์โหลด %s"
@@ -2145,6 +2140,75 @@ msgstr "อัปเดตไม่สำเร็จ: %s"
 msgctxt "UI_LAUNCH_UPDATED"
 msgid "Updated to %s: setting up again what it changed"
 msgstr "อัปเดตเป็น %s แล้ว: กำลังตั้งค่าส่วนที่เปลี่ยนอีกครั้ง"
+
+#. The update card's title; %s is the release (v0.1.12).
+#. printf format: keep every %... conversion, in the same order.
+msgctxt "UI_LAUNCH_UPDATE_TITLE"
+msgid "Update available: %s"
+msgstr ""
+
+#. Under it: %s the version in use, %d the download in MB.
+#. printf format: keep every %... conversion, in the same order.
+msgctxt "UI_LAUNCH_UPDATE_DETAIL"
+msgid "You have %s · %d MB to download"
+msgstr ""
+
+#. The update card's button: downloads and installs it.
+msgctxt "UI_LAUNCH_UPDATE_NOW"
+msgid "Update"
+msgstr ""
+
+#. Opens the release's notes on GitHub.
+msgctxt "UI_LAUNCH_WHATS_NEW"
+msgid "What's new"
+msgstr ""
+
+#. After a failed download.
+msgctxt "UI_LAUNCH_RETRY"
+msgid "Try again"
+msgstr ""
+
+#. The game files' state with the game version the setup installed.
+#. printf format: keep every %... conversion, in the same order.
+msgctxt "UI_LAUNCH_FILES_READY_AS"
+msgid "Game files ready (version %s)"
+msgstr ""
+
+#. Under Play: %s is the first controller's name.
+#. printf format: keep every %... conversion, in the same order.
+msgctxt "UI_LAUNCH_PAD"
+msgid "Controller: %s"
+msgstr ""
+
+#. Under Play when no controller is connected.
+msgctxt "UI_LAUNCH_PAD_NONE"
+msgid "No controller: keyboard and mouse work"
+msgstr ""
+
+#. On the controller row: opens the Controls tab.
+msgctxt "UI_LAUNCH_CONFIGURE"
+msgid "Configure"
+msgstr ""
+
+#. Offered once on the start screen after the setup.
+msgctxt "UI_LAUNCH_SHORTCUT_ASK"
+msgid "Start the game from your desktop"
+msgstr ""
+
+#. Makes the desktop shortcut.
+msgctxt "UI_LAUNCH_SHORTCUT_MAKE"
+msgid "Create shortcut"
+msgstr ""
+
+#. Puts the offer away; the button stays on the Game files page.
+msgctxt "UI_LAUNCH_NOT_NOW"
+msgid "Not now"
+msgstr ""
+
+#. The keys, at the lower right of the start screen.
+msgctxt "UI_LAUNCH_KEYS"
+msgid "Enter or A: select · F11: fullscreen"
+msgstr ""
 
 msgctxt "UI_LAUNCH_NO_GAME_DATA"
 msgid "Your own copy of the game · No game data included"
@@ -2194,10 +2258,6 @@ msgstr ""
 msgctxt "UI_LAUNCH_PLAYERS"
 msgid "Profiles"
 msgstr "โปรไฟล์"
-
-msgctxt "UI_LAUNCH_PLAYER"
-msgid "Profile: %s"
-msgstr "โปรไฟล์: %s"
 
 msgctxt "UI_PLAYER_NOTE"
 msgid ""
