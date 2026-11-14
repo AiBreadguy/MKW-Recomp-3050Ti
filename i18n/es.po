@@ -16,9 +16,10 @@ msgctxt "UI_MENU_TAB_SCREEN"
 msgid "Screen"
 msgstr "Pantalla"
 
-msgctxt "UI_MENU_TAB_GAME"
-msgid "Game"
-msgstr "Juego"
+#. The settings tab with the game's and the menu's language, LAN play and the update check.
+msgctxt "UI_MENU_TAB_GENERAL"
+msgid "General"
+msgstr ""
 
 msgctxt "UI_MENU_TAB_SOUND"
 msgid "Sound"
@@ -27,10 +28,6 @@ msgstr "Sonido"
 msgctxt "UI_MENU_TAB_CONTROLS"
 msgid "Controls"
 msgstr "Controles"
-
-msgctxt "UI_MENU_TAB_MENU"
-msgid "Menu"
-msgstr "Menú"
 
 msgctxt "UI_MENU_TAB_ADVANCED"
 msgid "Advanced"
@@ -508,6 +505,21 @@ msgstr "Nitidez de FSR"
 msgctxt "UI_MENU_SHARPNESS_DESC"
 msgid "Sharpening after FSR scaling; 0 turns it off."
 msgstr "Enfoque tras el escalado FSR; 0 lo quita."
+
+#. Under Sharpness, greyed out, when the upscaler is not AMD FSR 1.
+msgctxt "UI_MENU_SHARPNESS_FSR_ONLY"
+msgid "With AMD FSR 1 only"
+msgstr ""
+
+#. Group heading on the Graphics tab: internal resolution and upscaling.
+msgctxt "UI_MENU_GROUP_RESOLUTION"
+msgid "Resolution"
+msgstr ""
+
+#. Group heading on the Graphics tab: frame rate, frame generation, overlay.
+msgctxt "UI_MENU_GROUP_PERFORMANCE"
+msgid "Performance"
+msgstr ""
 
 msgctxt "UI_MENU_GAME_LANG"
 msgid "Game language"
@@ -2243,6 +2255,11 @@ msgstr ""
 #. The keys, at the lower right of the start screen.
 msgctxt "UI_LAUNCH_KEYS"
 msgid "Enter or A: select · F11: fullscreen"
+msgstr ""
+
+#. Beside the Settings title on the start screen.
+msgctxt "UI_LAUNCH_SETTINGS_NOTE"
+msgid "Changes are saved and apply when you press Play"
 msgstr ""
 
 msgctxt "UI_LAUNCH_NO_GAME_DATA"

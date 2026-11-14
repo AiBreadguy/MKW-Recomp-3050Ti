@@ -11,7 +11,7 @@
 // 5173d27, MIT, Copyright (c) 2026 Revivedx and the Savage Wind Recomp contributors).
 //
 // Test hooks: MKW_LAUNCHER_SHOT=<frame>[:<page>[:<tab>[:<scroll 0..1>]]] saves that frame as MKW_LAUNCHER_SHOT_OUT (default
-// launcher.png) and quits; page main, settings (tab 0..5), files, mods or players. The user's input is ignored while it
+// launcher.png) and quits; page main, settings (tab 0..6), files, mods or players. The user's input is ignored while it
 // runs.
 // MKW_LAUNCHER_SETUP=<folder>[:link] starts the setup from that folder at once, on the game files page.
 // MKW_LAUNCHER_MODS_PICK=<zip|folder> picks it on the Mods page, as its dialogs do; MKW_LAUNCHER_MODS_TOGGLE=<mod>
@@ -663,8 +663,9 @@ static void go_main(void) {
 }
 
 // A page that takes the whole window: its colour to the edges, its contents in a column no wider than the in-game
-// menu's (wider, a row's value would be too far from its name); returns the space its bottom row needs.
-static float panel_begin(const char *id, UiTextId title, float w, float h) {
+// menu's (wider, a row's value would be too far from its name), its title with an optional note at the right; returns
+// the space its bottom row needs.
+static float panel_begin(const char *id, UiTextId title, float w, float h, const char *note = nullptr) {
     float s = L.scale, ww = fminf(w, 1500 * s);
     ImGui::GetBackgroundDrawList()->AddRectFilled(ImVec2(0, 0), ImVec2(w, h), LOOK_PANEL);
     ImGui::SetNextWindowPos(ImVec2(floorf((w - ww) * 0.5f), 0), ImGuiCond_Always);
@@ -676,6 +677,13 @@ static float panel_begin(const char *id, UiTextId title, float w, float h) {
     ImGui::PushFont(L.head);
     ImGui::TextUnformatted(menu_text(title));
     ImGui::PopFont();
+    if (note) {   // on the title's line, at the right, in the dim colour
+        ImVec2 t = ImGui::GetItemRectMin(), tb = ImGui::GetItemRectMax();
+        float x = ImGui::GetWindowPos().x + ImGui::GetWindowWidth() - ImGui::GetStyle().WindowPadding.x;
+        ImGui::GetWindowDrawList()->AddText(ImVec2(x - ImGui::CalcTextSize(note).x,
+                                                   (t.y + tb.y - ImGui::GetTextLineHeight()) * 0.5f),
+                                            LOOK_DIM, note);
+    }
     ImGui::Dummy(ImVec2(0, 4 * s));
     const ImGuiStyle &st = ImGui::GetStyle();
     return item_height() + st.ItemSpacing.y * 2;   // the bottom row's Back button (panel_back_row)
@@ -707,7 +715,7 @@ static void page_players(float w, float h) {
 }
 
 static void page_settings(float w, float h) {
-    float bottom = panel_begin("##settings", UI_LAUNCH_SETTINGS, w, h);
+    float bottom = panel_begin("##settings", UI_LAUNCH_SETTINGS, w, h, menu_text(UI_LAUNCH_SETTINGS_NOTE));
     settings_tabs(L.scale, bottom);
     bool back = panel_back_row();
     if (!settings_modal() && back_pressed()) back = true;
