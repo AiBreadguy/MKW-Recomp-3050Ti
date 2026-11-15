@@ -76,6 +76,12 @@ its issue, #N), `### Tested` (what was run from the packages before publishing) 
   midway (8 of 8, against 30 % of the game's fragment shaders). A discarded pixel now stays as a helper to the end of
   the shader (Vulkan's demote, as Switch emulators and DXVK do) instead of ending in the middle of it. Verified on the
   captures (same images) and not on an NVIDIA card.
+- **The GPU hang report comes before amdgpu resets the GPU** (#327 by @andreknieriem): on the Steam Deck the kernel
+  resets a GPU job after 5 s (SteamOS's `amdgpu.lockup_timeout`), as soon as the report of #297 was due, so three hangs
+  ended with no line in `mkw.log`. On amdgpu the report now comes after two fifths of that timeout (2 s on the Deck);
+  an unset or unavailable kernel timeout uses 1 s (the documented default has been as short as 2 s), elsewhere it stays
+  at 5 s, and `MKW_GPU_HANG_MS` sets it. Each stuck episode reports once, not only the first, and one the GPU finishes
+  after all says so ("it was slow, not hung").
 
 ## 0.1.11
 
