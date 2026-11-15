@@ -24,7 +24,6 @@
 #include "platform/platform.h"
 #include "menu.h"
 #include "presence.h"
-#include "ui_text.h"
 
 #define TICK_MS 500          // how often the thread looks at the phase and reads what Discord sent
 #define RETRY_MS 15000       // between attempts to reach Discord while it is not running
@@ -254,16 +253,14 @@ static void json_str(char *out, size_t cap, const char *s) {
     out[o] = 0;
 }
 
-// What the profile says: details (the phase) and state (the course, or the port's settings), in the menu language.
+// What the profile says: details (the phase) and state (the course, or the port's settings). In English whatever the
+// menu language, as the course names are (the user, 15/11/2026).
 static void describe(char *details, size_t dcap, char *state, size_t scap) {
     int m = atomic_load_explicit(&mode, memory_order_relaxed), r = atomic_load_explicit(&racing, memory_order_relaxed);
-    UiTextId id = !r ? UI_PRESENCE_START : r == 1 ? UI_PRESENCE_MENUS
-                : m == MODE_GRAND_PRIX ? UI_PRESENCE_GRAND_PRIX : m == MODE_KNOCKOUT ? UI_PRESENCE_KNOCKOUT
-                : m == MODE_TIME_TRIAL ? UI_PRESENCE_TIME_TRIAL : m == MODE_BATTLE ? UI_PRESENCE_BATTLE
-                : UI_PRESENCE_RACE;
-    snprintf(details, dcap, "%s", menu_text(id));
+    static const char *const modes[] = {"Racing", "Grand Prix", "Knockout Tour", "Time Trial", "Battle"};
+    snprintf(details, dcap, "%s", !r ? "Starting the game" : r == 1 ? "In the menus" : modes[m]);
     *state = 0;
-    if (menu_is_open()) snprintf(state, scap, "%s", menu_text(UI_PRESENCE_SETTINGS));
+    if (menu_is_open()) snprintf(state, scap, "In the port's settings");
     else if (r == 2) {
         plat_mutex_lock(&course_lock);
         snprintf(state, scap, "%s", course);

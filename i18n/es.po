@@ -2618,38 +2618,6 @@ msgstr ""
 "Mientras juegas, tu perfil de Discord muestra que estás jugando, desde cuándo y si estás en "
 "carrera o en los menús. Solo se le dice a la app de Discord de este ordenador."
 
-msgctxt "UI_PRESENCE_START"
-msgid "Starting the game"
-msgstr "Arrancando el juego"
-
-msgctxt "UI_PRESENCE_MENUS"
-msgid "In the menus"
-msgstr "En los menús"
-
-msgctxt "UI_PRESENCE_RACE"
-msgid "Racing"
-msgstr "En carrera"
-
-msgctxt "UI_PRESENCE_GRAND_PRIX"
-msgid "Grand Prix"
-msgstr "Grand Prix"
-
-msgctxt "UI_PRESENCE_KNOCKOUT"
-msgid "Knockout Tour"
-msgstr "Supervivencia"
-
-msgctxt "UI_PRESENCE_TIME_TRIAL"
-msgid "Time Trial"
-msgstr "Contrarreloj"
-
-msgctxt "UI_PRESENCE_BATTLE"
-msgid "Battle"
-msgstr "Batalla"
-
-msgctxt "UI_PRESENCE_SETTINGS"
-msgid "In the port's settings"
-msgstr "En los ajustes del port"
-
 msgctxt "UI_LAUNCH_PLAYERS"
 msgid "Profiles"
 msgstr "Perfiles"

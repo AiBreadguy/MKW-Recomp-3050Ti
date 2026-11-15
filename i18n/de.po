@@ -2623,38 +2623,6 @@ msgid ""
 "you are racing or in the menus. Only the Discord app on this computer is told."
 msgstr ""
 
-msgctxt "UI_PRESENCE_START"
-msgid "Starting the game"
-msgstr ""
-
-msgctxt "UI_PRESENCE_MENUS"
-msgid "In the menus"
-msgstr ""
-
-msgctxt "UI_PRESENCE_RACE"
-msgid "Racing"
-msgstr ""
-
-msgctxt "UI_PRESENCE_GRAND_PRIX"
-msgid "Grand Prix"
-msgstr ""
-
-msgctxt "UI_PRESENCE_KNOCKOUT"
-msgid "Knockout Tour"
-msgstr ""
-
-msgctxt "UI_PRESENCE_TIME_TRIAL"
-msgid "Time Trial"
-msgstr ""
-
-msgctxt "UI_PRESENCE_BATTLE"
-msgid "Battle"
-msgstr ""
-
-msgctxt "UI_PRESENCE_SETTINGS"
-msgid "In the port's settings"
-msgstr ""
-
 msgctxt "UI_LAUNCH_PLAYERS"
 msgid "Profiles"
 msgstr "Profile"
