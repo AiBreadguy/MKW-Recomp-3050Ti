@@ -327,7 +327,7 @@ static void live_scan(void *arg) {
         }
         applied++;
     }
-    rt_log("classic grand prix: %s from the next race: %d places in the game's memory (%d stale skipped, %.0f MiB in %.1f s)",
+    rt_log("classic grand prix: %s for future races: %d places in the game's memory (%d stale skipped, %.0f MiB in %.1f s)",
            on ? "on" : "off", applied, nhit - applied, scanned / 1048576.0, (plat_now_ns() - t0) / 1e9);
     __atomic_store_n(&g_live.busy, 0, __ATOMIC_RELEASE);
 }

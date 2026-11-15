@@ -142,8 +142,8 @@ msgstr ""
 
 msgctxt "UI_MENU_CLASSIC_GP_DESC"
 msgid ""
-"Every race of a Grand Prix cup is laps on one course: instead of the drive to the next course, "
-"you race that course. Knockout Tour stays as it is. From the next race."
+"Grand Prix races take place on each course instead of the road to it. Knockout Tour is unchanged. "
+"Changes take several seconds and affect races started afterward."
 msgstr ""
 
 msgctxt "UI_MENU_ANISO"
