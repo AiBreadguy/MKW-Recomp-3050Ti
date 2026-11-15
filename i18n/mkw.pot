@@ -134,6 +134,16 @@ msgctxt "UI_MENU_QUICK_RACE_FREE"
 msgid "Free roam"
 msgstr ""
 
+msgctxt "UI_MENU_CLASSIC_GP"
+msgid "Classic Grand Prix"
+msgstr ""
+
+msgctxt "UI_MENU_CLASSIC_GP_DESC"
+msgid ""
+"Every race of a Grand Prix cup is laps on one course: instead of the drive to the next course, "
+"you race that course. Knockout Tour stays as it is. From the next race."
+msgstr ""
+
 msgctxt "UI_MENU_ANISO"
 msgid "Texture filtering"
 msgstr ""
