@@ -169,7 +169,7 @@ def clean(args: argparse.Namespace) -> None:
                     shutil.rmtree(p) if p.is_dir() and not p.is_symlink() else p.unlink()
                 n += 1
                 break
-            except PermissionError:
+            except OSError:   # a running exe on Windows; in keep/, a leftover entry the previous clean-up left
                 time.sleep(1)
     shutil.rmtree(game / "update", ignore_errors=True)
     emit("cleaned", n)
