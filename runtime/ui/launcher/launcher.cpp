@@ -1,5 +1,5 @@
-// The start screen, shown before the game: Play, Settings, Game files and Quit, the game files' state at the lower left
-//. The player's build (build.py --dist) always starts here; Play starts the process again
+// The start screen, shown before the game: Play and the profile, the controllers, Settings, Game files, Mods and Quit,
+// the update offered, the game files' state at the lower left. The player's build (build.py --dist) always starts here; Play starts the process again
 // with the launcher skipped (main.c), so the game claims its address space in a fresh process. build/mkw shows it only
 // with --launcher.
 //
@@ -28,6 +28,7 @@
 // at once, as its button does. The last run's notice (launcher_lastrun.h) is read during a shot only with
 // MKW_LAUNCHER_LASTRUN=1.
 #include <SDL3/SDL.h>
+#include <ctype.h>
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -36,6 +37,7 @@
 #include "backends/imgui_impl_sdl3.h"
 #include "backends/imgui_impl_sdlrenderer3.h"
 #include "imgui.h"
+#include "imgui_internal.h"   // RenderTextEllipsis
 #include "ui/launcher/launcher.h"
 #include "ui/launcher/launcher_backdrop.h"
 #include "ui/launcher/launcher_logo.h"
@@ -88,6 +90,9 @@ static struct {
     int link_romfs;                 // 0 copy it into the game folder, 1 use it where it is
     int tools;                      // the setup tools are there
     char shortcut_note[1200];       // what the shortcut button did
+    char game_version[32];          // the game version the last setup installed; "" unknown (read_game_version)
+    int pads;                       // the gamepads SDL sees, and the first one's name (pads_refresh)
+    char pad_name[128];
     char updated[96];               // the release the previous run installed (launcher_update.h)
     int relaunch;                   // an update is in place: start the new program when the window is gone
     double intro_t0;                // when the main page was first shown (its intro, once a run); 0 not yet
@@ -102,21 +107,59 @@ static void exe_dir(char *out, size_t cap) {
     if (cut) *cut = 0;
 }
 
-// The Vulkan devices for the Screen tab's GPU row: an instance only to list them.
+// The last setup's record (tools/prepare/prepare.py), NUL-terminated in buf; false when there is none.
+// plat_file_read takes the UTF-8 path: fopen reads it in the ANSI code page on Windows, so a game folder with an accent
+// in its name had no record.
+static bool read_setup_state(char *buf, size_t cap) {
+    char path[PLAT_PATH_MAX * 3];
+    snprintf(path, sizeof path, "%s/setup-state.json", cfg_game_dir());
+    uint64_t size = 0;
+    uint8_t *data = plat_file_read(path, &size);
+    if (!data) return false;
+    size_t n = size < cap - 1 ? (size_t)size : cap - 1;
+    memcpy(buf, data, n);
+    buf[n] = 0;
+    free(data);
+    return true;
+}
+
 // The last setup was made by another version: a player who updated by hand (a new AppImage, or the zip over the old
 // folder) kept the old shaders and game code (#50: 0.1.8 played with 0.1.7's shaders). States from before 0.1.9 keep
 // no version, so they set up again once too; prepare.py runs only the steps whose key changed.
-static int setup_from_other_version(const char *state) {
-    FILE *f = fopen(state, "rb");
-    if (!f) return 0;
+static int setup_from_other_version(void) {
     static char buf[16384];
-    size_t n = fread(buf, 1, sizeof buf - 1, f);
-    fclose(f);
-    buf[n] = 0;
+    if (!read_setup_state(buf, sizeof buf)) return 0;
     char want[96];
     snprintf(want, sizeof want, "\"port\": \"%s\"", rt_port_version);
     return !strstr(buf, want);
 }
+
+// The game version the last setup installed: its compile step's key is "<build id> <version> ...". Read when a page is
+// shown, not every frame.
+static void read_game_version(void) {
+    static char buf[16384];
+    L.game_version[0] = 0;
+    const char *p = read_setup_state(buf, sizeof buf) ? strstr(buf, "\"compile\": \"") : nullptr;
+    if (p) sscanf(p + 12, "%*s %31[0-9.]", L.game_version);
+}
+
+// The gamepads SDL sees: their count and the first one's name. Called at start and when one is connected or removed.
+static void pads_refresh(void) {
+    int n = 0;
+    SDL_JoystickID *ids = SDL_GetGamepads(&n);
+    const char *name = ids && n > 0 ? SDL_GetGamepadNameForID(ids[0]) : nullptr;
+    L.pads = ids ? n : 0;
+    snprintf(L.pad_name, sizeof L.pad_name, "%s", name ? name : "");
+    SDL_free(ids);
+}
+
+// The GitHub repository the releases and the issues are in: MKW_UPDATE_REPO (tests, forks), else upstream's.
+static const char *repo(void) {
+    const char *r = getenv("MKW_UPDATE_REPO");
+    return r && *r ? r : "adriadam10/mkw-recomp";
+}
+
+// The Vulkan devices for the Screen tab's GPU row: an instance only to list them.
 
 static void list_gpus(void) {
     VkApplicationInfo ai = {VK_STRUCTURE_TYPE_APPLICATION_INFO};
@@ -181,26 +224,110 @@ static float eased(ImGuiID id, bool on) {
 static float intro(int i) { return launcher_intro(L.shot_at ? 0 : L.intro_t0, i); }
 static void intro_apply(ImDrawList *dl, int start, float k) { launcher_intro_apply(dl, start, k, L.scale); }
 
+static ImU32 with_alpha(ImU32 c, int a) { return (c & ~IM_COL32_A_MASK) | ((ImU32)a << IM_COL32_A_SHIFT); }
+
+// The start screen's drawn buttons (Play, the profile, the menu rows): an invisible button with the hand cursor, how
+// far its hover has eased in (mouse or the controller's cursor), and whether the controller's cursor is on it.
+struct Hot {
+    bool hit, held, cursor;
+    float t;
+};
+
+static Hot hot_button(const char *id, ImVec2 size, bool enabled = true) {
+    ImGui::BeginDisabled(!enabled);
+    Hot h;
+    h.hit = ImGui::InvisibleButton(id, size);
+    bool over = ImGui::IsItemHovered();
+    if (enabled && over) ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);   // it can be clicked
+    h.held = ImGui::IsItemActive();
+    h.cursor = ImGui::IsItemFocused() && ImGui::GetIO().NavVisible;
+    h.t = eased(ImGui::GetItemID(), enabled && (over || h.cursor));
+    ImGui::EndDisabled();
+    return h;
+}
+
+// Text on one line from pos to max_x in col, cut with an ellipsis when it does not fit (a long name).
+static void text_fit(ImDrawList *dl, ImVec2 pos, float max_x, ImU32 col, const char *text) {
+    ImGui::PushStyleColor(ImGuiCol_Text, col);
+    ImGui::RenderTextEllipsis(dl, pos, ImVec2(max_x, pos.y + ImGui::GetTextLineHeight()), max_x, max_x, text, nullptr,
+                              nullptr);
+    ImGui::PopStyleColor();
+}
+
+// The controller's cursor around a drawn button, a little outside it.
+static void focus_ring(ImVec2 a, ImVec2 b) {
+    float s = L.scale;
+    ImGui::GetWindowDrawList()->AddRect(ImVec2(a.x - 4 * s, a.y - 4 * s), ImVec2(b.x + 4 * s, b.y + 4 * s), LOOK_FOCUS,
+                                        6 * s, 0, 2 * s);
+}
+
 // The main page's one blue button: a play triangle and the label on the left, in the heading's size.
 static bool play_button(const char *label, ImVec2 size, bool enabled) {
     float s = L.scale;
     ImVec2 a = ImGui::GetCursorScreenPos(), b(a.x + size.x, a.y + size.y);
-    ImGui::BeginDisabled(!enabled);
-    bool hit = ImGui::InvisibleButton("##play", size);
-    if (enabled && ImGui::IsItemHovered()) ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);   // it can be clicked
-    bool held = ImGui::IsItemActive(), cursor = ImGui::IsItemFocused() && ImGui::GetIO().NavVisible;
-    float hot = eased(ImGui::GetItemID(), enabled && (ImGui::IsItemHovered() || cursor));
-    ImGui::EndDisabled();
+    Hot h = hot_button("##play", size, enabled);
     ImDrawList *dl = ImGui::GetWindowDrawList();
-    ImU32 fill = !enabled ? LOOK_RAISED : held ? LOOK_ACCENT_DOWN : mix(LOOK_ACCENT, LOOK_ACCENT_HOT, hot);
+    ImU32 fill = !enabled ? LOOK_RAISED : h.held ? LOOK_ACCENT_DOWN : mix(LOOK_ACCENT, LOOK_ACCENT_HOT, h.t);
     ImU32 text = enabled ? IM_COL32(255, 255, 255, 255) : LOOK_OFF;
     dl->AddRectFilled(a, b, fill, 4 * s);
-    if (cursor) dl->AddRect(ImVec2(a.x - 4 * s, a.y - 4 * s), ImVec2(b.x + 4 * s, b.y + 4 * s), LOOK_FOCUS, 6 * s, 0, 2 * s);
+    if (h.cursor) focus_ring(a, b);
     float fs = L.head->FontSize, k = fs * 0.32f, gap = 18 * s;
     float x = a.x + 28 * s, cy = (a.y + b.y) * 0.5f;   // on the left, in line with the menu's labels
     dl->AddTriangleFilled(ImVec2(x, cy - k), ImVec2(x + k * 1.6f, cy), ImVec2(x, cy + k), text);
     dl->AddText(L.head, fs, ImVec2(x + k * 1.6f + gap, cy - fs * 0.5f), text, label);
-    return hit;
+    return h.hit;
+}
+
+// The profile that plays, beside Play: its initial in a disc and its name, clipped to the chip; it opens the Profiles
+// page. A value with a place behind it, so a chip and not a menu row ("Profile: Player" read as both).
+static bool profile_chip(ImVec2 size) {
+    float s = L.scale, lh = ImGui::GetTextLineHeight();
+    ImVec2 a = ImGui::GetCursorScreenPos(), b(a.x + size.x, a.y + size.y);
+    Hot h = hot_button("##profile", size);
+    ImDrawList *dl = ImGui::GetWindowDrawList();
+    dl->AddRectFilled(a, b, mix(LOOK_ROW, LOOK_ROW_HOT, h.t), 4 * s);
+    dl->AddRect(a, b, LOOK_LINE, 4 * s, 0, s);
+    if (h.cursor) focus_ring(a, b);
+    const char *name = launcher_player_name();
+    unsigned char c0 = (unsigned char)name[0];   // the first UTF-8 character, upper case when it is ASCII
+    int n = c0 < 0x80 ? 1 : c0 < 0xE0 ? 2 : c0 < 0xF0 ? 3 : 4;
+    char initial[5] = {};
+    for (int i = 0; i < n && name[i]; i++) initial[i] = name[i];
+    if (c0 < 0x80) initial[0] = (char)toupper(c0);
+    float r = size.y * 0.24f, cx = a.x + 12 * s + r, cy = (a.y + b.y) * 0.5f, caret = 5 * s;
+    dl->AddCircleFilled(ImVec2(cx, cy), r, mix(LOOK_RAISED, LOOK_HOVER, h.t), 24);
+    ImVec2 isz = ImGui::CalcTextSize(initial);
+    dl->AddText(ImVec2(cx - isz.x * 0.5f, cy - isz.y * 0.5f), LOOK_TEXT, initial);
+    float tx = cx + r + 10 * s, cr = b.x - 14 * s;
+    text_fit(dl, ImVec2(tx, cy - lh * 0.5f), cr - caret * 2 - 8 * s, mix(LOOK_HEADING, LOOK_TEXT, h.t), name);
+    dl->AddTriangleFilled(ImVec2(cr - caret * 2, cy - caret * 0.5f), ImVec2(cr, cy - caret * 0.5f),
+                          ImVec2(cr - caret, cy + caret * 0.5f), LOOK_DIM);
+    return h.hit;
+}
+
+// Under Play, whether a controller is there before the race starts: the first gamepad's name (and how many more), or
+// that the keyboard and mouse work; it opens the Controls tab.
+static bool pad_row(float w, float hgt) {
+    float s = L.scale, lh = ImGui::GetTextLineHeight();
+    ImVec2 a = ImGui::GetCursorScreenPos(), b(a.x + w, a.y + hgt);
+    Hot h = hot_button("##pads", ImVec2(w, hgt));
+    ImDrawList *dl = ImGui::GetWindowDrawList();
+    dl->AddRectFilled(a, b, mix(with_alpha(LOOK_ROW, 0), LOOK_ROW_HOT, h.t), 4 * s);
+    dl->AddRect(a, b, LOOK_LINE, 4 * s, 0, s);
+    if (h.cursor) focus_ring(a, b);
+    char text[200];
+    if (L.pads > 0) {
+        int n = snprintf(text, sizeof text, menu_text(UI_LAUNCH_PAD), L.pad_name);
+        if (L.pads > 1 && n > 0 && n < (int)sizeof text) snprintf(text + n, sizeof text - n, " +%d", L.pads - 1);
+    } else {
+        snprintf(text, sizeof text, "%s", menu_text(UI_LAUNCH_PAD_NONE));
+    }
+    const char *go = menu_text(UI_LAUNCH_CONFIGURE);
+    float cy = (a.y + b.y) * 0.5f, ty = cy - lh * 0.5f, gw = ImGui::CalcTextSize(go).x, x = a.x + 14 * s;
+    dl->AddCircleFilled(ImVec2(x + 4 * s, cy), 4 * s, L.pads > 0 ? LOOK_OK : LOOK_DIM, 12);
+    text_fit(dl, ImVec2(x + 18 * s, ty), b.x - gw - 28 * s, mix(LOOK_HEADING, LOOK_TEXT, h.t), text);
+    dl->AddText(ImVec2(b.x - 14 * s - gw, ty), mix(LOOK_ACCENT_HOT, LOOK_TEXT, h.t), go);
+    return h.hit;
 }
 
 // The height of a row of the main page's menu and of a page's buttons: 60 at 1080 lines, never under 44 pixels (the
@@ -212,25 +339,65 @@ static float item_height(void) { return fmaxf(44.0f, 60 * L.scale); }
 static bool menu_item(const char *label, float width, bool enabled) {
     float s = L.scale, hgt = item_height();
     ImVec2 a = ImGui::GetCursorScreenPos(), b(a.x + width, a.y + hgt);
-    ImGui::BeginDisabled(!enabled);
     ImGui::PushID(label);
-    bool hit = ImGui::InvisibleButton("##item", ImVec2(width, hgt));
-    if (enabled && ImGui::IsItemHovered()) ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
-    bool held = ImGui::IsItemActive(), cursor = ImGui::IsItemFocused() && ImGui::GetIO().NavVisible;
-    float hot = eased(ImGui::GetItemID(), enabled && (ImGui::IsItemHovered() || cursor));
+    Hot h = hot_button("##item", ImVec2(width, hgt), enabled);
     ImGui::PopID();
-    ImGui::EndDisabled();
     ImDrawList *dl = ImGui::GetWindowDrawList();
-    if (hot > 0.01f) {
-        ImVec4 c = col4(held ? LOOK_ACCENT_DOWN : LOOK_ACCENT);
-        ImU32 from = ImGui::ColorConvertFloat4ToU32(ImVec4(c.x, c.y, c.z, 0.85f * hot)),
-              to = ImGui::ColorConvertFloat4ToU32(ImVec4(c.x, c.y, c.z, 0));
+    if (h.t > 0.01f) {
+        ImU32 c = h.held ? LOOK_ACCENT_DOWN : LOOK_ACCENT;
+        ImU32 from = with_alpha(c, (int)(217 * h.t)), to = with_alpha(c, 0);
         dl->AddRectFilledMultiColor(a, b, from, to, to, from);
-        dl->AddRectFilled(a, ImVec2(a.x + 3 * s, b.y), ImGui::ColorConvertFloat4ToU32(ImVec4(1, 1, 1, hot)));
+        dl->AddRectFilled(a, ImVec2(a.x + 3 * s, b.y), with_alpha(IM_COL32_WHITE, (int)(255 * h.t)));
     }
     float fs = L.item->FontSize;
-    dl->AddText(L.item, fs, ImVec2(a.x + 24 * s + 4 * s * hot, (a.y + b.y - fs) * 0.5f),
-                enabled ? mix(LOOK_HEADING, LOOK_TEXT, hot) : LOOK_OFF, label);
+    dl->AddText(L.item, fs, ImVec2(a.x + 24 * s + 4 * s * h.t, (a.y + b.y - fs) * 0.5f),
+                enabled ? mix(LOOK_HEADING, LOOK_TEXT, h.t) : LOOK_OFF, label);
+    return h.hit;
+}
+
+// A bordered card around what is drawn between card_begin and card_end, w wide and as tall as its contents. Its fill is
+// drawn under them on a second draw channel once their height is known. Cards do not nest.
+static struct {
+    ImVec2 a;
+    float w;
+} g_card;
+
+static float card_pad(void) { return 16 * L.scale; }
+
+static void card_begin(float w) {
+    ImDrawList *dl = ImGui::GetWindowDrawList();
+    dl->ChannelsSplit(2);
+    dl->ChannelsSetCurrent(1);
+    g_card.a = ImGui::GetCursorScreenPos();
+    g_card.w = w;
+    float p = card_pad();
+    ImGui::SetCursorScreenPos(ImVec2(g_card.a.x + p, g_card.a.y + p));
+    ImGui::BeginGroup();
+    ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + w - 2 * p);
+}
+
+static void card_end(ImU32 edge, ImU32 fill) {
+    ImGui::PopTextWrapPos();
+    ImGui::EndGroup();
+    float s = L.scale;
+    ImVec2 b(g_card.a.x + g_card.w, ImGui::GetItemRectMax().y + card_pad());
+    ImDrawList *dl = ImGui::GetWindowDrawList();
+    dl->ChannelsSetCurrent(0);
+    dl->AddRectFilled(g_card.a, b, fill, 6 * s);
+    dl->AddRect(g_card.a, b, edge, 6 * s, 0, 1.5f * s);
+    dl->ChannelsMerge();
+    ImGui::SetCursorScreenPos(g_card.a);
+    ImGui::Dummy(ImVec2(g_card.w, b.y - g_card.a.y));
+}
+
+// The page's one main action in the accent, white on blue as Play.
+static bool accent_button(const char *label, ImVec2 size = ImVec2(0, 0)) {
+    ImGui::PushStyleColor(ImGuiCol_Button, col4(LOOK_ACCENT));
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, col4(LOOK_ACCENT_HOT));
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive, col4(LOOK_ACCENT_DOWN));
+    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1, 1, 1, 1));
+    bool hit = ImGui::Button(label, size);
+    ImGui::PopStyleColor(4);
     return hit;
 }
 
@@ -248,49 +415,82 @@ static void make_shortcut(void) {
     rt_log("launcher: desktop shortcut %s %s", ok ? "made:" : "failed", ok ? made : "");
 }
 
-// The update offered (launcher_update.h): its button, then the download's progress; once downloaded, installed and
-// the program started again. A failed check shows nothing, a failed download says why.
-static void update_row(float bw) {
+// The update offered (launcher_update.h) as a card in the accent: the release, the version in use and the download's
+// size, with Update and a link to the release's notes; then the download's progress; a failed download in red with its
+// reason and Try again. Once downloaded it is installed and the program starts again. A failed check shows nothing.
+static void update_card(float w) {
     UpdateState u = update_state();
-    char text[700];
-    if (u.phase == UPDATE_OFFER) {
-        snprintf(text, sizeof text, menu_text(UI_LAUNCH_UPDATE), u.tag, (int)((u.bytes + (1 << 19)) >> 20));
-        if (ImGui::Button(text, ImVec2(bw, 0)) || getenv("MKW_LAUNCHER_UPDATE")) update_fetch_start(L.exe_dir);
-    } else if (u.phase == UPDATE_FETCHING) {
-        snprintf(text, sizeof text, menu_text(UI_LAUNCH_UPDATE_FETCHING), u.tag);
-        ImGui::ProgressBar(u.total > 0 ? (float)u.done / (float)u.total : 0, ImVec2(bw, 0), text);
-    } else if (u.phase == UPDATE_READY) {
+    if (u.phase == UPDATE_READY) {
         if (update_apply(L.exe_dir)) L.relaunch = 1, L.result = LAUNCHER_QUIT;
-    } else if (u.phase == UPDATE_FAILED) {
-        snprintf(text, sizeof text, menu_text(UI_LAUNCH_UPDATE_FAILED), u.error);
-        ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + bw);
-        ImGui::TextColored(col4(LOOK_BAD), "%s", text);
-        ImGui::PopTextWrapPos();
-    } else {
         return;
     }
-    ImGui::Dummy(ImVec2(0, 10 * L.scale));
+    bool failed = u.phase == UPDATE_FAILED && u.tag[0];
+    if (u.phase != UPDATE_OFFER && u.phase != UPDATE_FETCHING && !failed) return;
+    char text[700];
+    card_begin(w);
+    if (failed) {
+        snprintf(text, sizeof text, menu_text(UI_LAUNCH_UPDATE_FAILED), u.error);
+        ImGui::TextColored(col4(LOOK_BAD), "%s", text);
+        if (ImGui::Button(menu_text(UI_LAUNCH_RETRY))) update_fetch_start(L.exe_dir);
+    } else if (u.phase == UPDATE_OFFER) {
+        snprintf(text, sizeof text, menu_text(UI_LAUNCH_UPDATE_TITLE), u.tag);
+        ImGui::TextUnformatted(text);
+        snprintf(text, sizeof text, menu_text(UI_LAUNCH_UPDATE_DETAIL), rt_port_version,
+                 (int)((u.bytes + (1 << 19)) >> 20));
+        ImGui::TextColored(col4(LOOK_HEADING), "%s", text);
+        if (accent_button(menu_text(UI_LAUNCH_UPDATE_NOW)) || getenv("MKW_LAUNCHER_UPDATE")) update_fetch_start(L.exe_dir);
+        ImGui::SameLine();
+        if (ImGui::Button(menu_text(UI_LAUNCH_WHATS_NEW))) {
+            snprintf(text, sizeof text, "https://github.com/%s/releases/tag/%s", repo(), u.tag);
+            SDL_OpenURL(text);
+        }
+    } else {
+        snprintf(text, sizeof text, menu_text(UI_LAUNCH_UPDATE_FETCHING), u.tag);
+        ImGui::TextUnformatted(text);
+        snprintf(text, sizeof text, "%lld / %lld MB", u.done >> 20, u.total >> 20);
+        ImGui::ProgressBar(u.total > 0 ? (float)u.done / (float)u.total : 0, ImVec2(w - 2 * card_pad(), 0), text);
+    }
+    card_end(failed ? LOOK_BAD : LOOK_ACCENT_HOT, with_alpha(failed ? LOOK_BAD : LOOK_ACCENT, 40));
+}
+
+// After the game is set up, once: the desktop shortcut offered on the main page until it is made or put off. The
+// button stays on the Game files page; MKW_SHORTCUT_ASKED (no settings row, like MKW_PLAYER) keeps the answer.
+static bool shortcut_asked(void) {
+    const char *v = cfg_get("MKW_SHORTCUT_ASKED");
+    return v && *v && strcmp(v, "0");
+}
+
+static void shortcut_card(float w) {
+    card_begin(w);
+    ImGui::TextUnformatted(menu_text(UI_LAUNCH_SHORTCUT_ASK));
+    bool make = ImGui::Button(menu_text(UI_LAUNCH_SHORTCUT_MAKE));
+    ImGui::SameLine(0, 8 * L.scale);
+    bool later = ImGui::Button(menu_text(UI_LAUNCH_NOT_NOW));
+    card_end(LOOK_LINE, LOOK_ROW);
+    if (make) make_shortcut();
+    if (make || later) {
+        cfg_set("MKW_SHORTCUT_ASKED", "1");
+        opt_save_soon();
+    }
 }
 
 // How the last game ended (launcher_lastrun.h), when it did not end well: a known problem with the button to its
-// issue, one an update fixes (the update's own row offers it), or an unknown error with the bug form. Close hides it.
+// issue, one an update fixes (the update's own card offers it), or an unknown error with the bug form. Close hides it.
 static void lastrun_row(float bw) {
     LastRun r = lastrun_state();
     if (r.kind == LASTRUN_NONE) return;
-    const char *repo = getenv("MKW_UPDATE_REPO");
-    if (!repo || !*repo) repo = "adriadam10/mkw-recomp";
     char text[700], button[160], url[300];
     url[0] = 0;
     if (r.kind == LASTRUN_KNOWN) {
         snprintf(text, sizeof text, menu_text(UI_LAUNCH_LASTRUN_KNOWN), r.issue);
         snprintf(button, sizeof button, menu_text(UI_LAUNCH_LASTRUN_OPEN), r.issue);
-        snprintf(url, sizeof url, "https://github.com/%s/issues/%d", repo, r.issue);
+        snprintf(url, sizeof url, "https://github.com/%s/issues/%d", repo(), r.issue);
     } else if (r.kind == LASTRUN_FIXED) {
         snprintf(text, sizeof text, menu_text(UI_LAUNCH_LASTRUN_FIXED), r.tag);
     } else {
         snprintf(text, sizeof text, "%s", menu_text(UI_LAUNCH_LASTRUN_CRASH));
         snprintf(button, sizeof button, "%s", menu_text(UI_LAUNCH_LASTRUN_REPORT));
-        snprintf(url, sizeof url, "https://github.com/%s/issues/new?template=bug_report.yml", repo);
+        snprintf(url, sizeof url, "https://github.com/%s/issues/new?template=bug_report.yml", repo());
     }
     ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + bw);
     ImGui::TextColored(col4(r.kind == LASTRUN_FIXED ? LOOK_WARN : LOOK_BAD), "%s", text);
@@ -312,33 +512,62 @@ static void state_line(bool ok, const char *text) {
     ImGui::TextColored(col4(ok ? LOOK_OK : LOOK_WARN), "%s", text);
 }
 
-// The main page, in the original's structure: a column on the left with the title and the menu (Play, the profile that
-// plays, then Settings, Game files and the desktop shortcut, Quit last and apart), the game files' state at the lower
-// left and the version at
-// the lower right. The picture is the background's (launcher_backdrop.cpp): the player's splash.png, or the logo's flag.
+// The game files' state in words, with the version the last setup installed when it is known.
+static void files_state_text(bool ready, char *out, size_t cap) {
+    if (ready && L.game_version[0]) snprintf(out, cap, menu_text(UI_LAUNCH_FILES_READY_AS), L.game_version);
+    else snprintf(out, cap, "%s", menu_text(ready ? UI_LAUNCH_FILES_READY : UI_LAUNCH_FILES_MISSING));
+}
+
+// The game files' state at the lower left, a dot in its colour; it opens the Game files page.
+static bool status_link(bool ready) {
+    float s = L.scale, lh = ImGui::GetTextLineHeight(), r = lh * 0.24f, chev = 4 * s;
+    char text[160];
+    files_state_text(ready, text, sizeof text);
+    float tw = ImGui::CalcTextSize(text).x;
+    ImVec2 a = ImGui::GetCursorScreenPos(), size(r * 2 + 10 * s + tw + 12 * s + chev, lh);
+    Hot h = hot_button("##status", size);
+    if (h.cursor) focus_ring(a, ImVec2(a.x + size.x, a.y + size.y));
+    ImDrawList *dl = ImGui::GetWindowDrawList();
+    ImU32 c = ready ? mix(LOOK_HEADING, LOOK_TEXT, h.t) : LOOK_WARN;
+    float cy = a.y + lh * 0.5f, x = a.x + r * 2 + 10 * s;
+    dl->AddCircleFilled(ImVec2(a.x + r, cy), r, ready ? LOOK_OK : LOOK_WARN, 16);
+    dl->AddText(ImVec2(x, a.y), c, text);
+    x += tw + 12 * s;
+    ImVec2 v[3] = {ImVec2(x, cy - chev), ImVec2(x + chev, cy), ImVec2(x, cy + chev)};
+    dl->AddPolyline(v, 3, c, 0, 1.5f * s);
+    return h.hit;
+}
+
+// The main page: a column on the left with the title, Play with the profile beside it, the controllers, then Settings,
+// Game files and Mods, Quit last and apart, and once after setup the desktop shortcut; the update at the upper right;
+// the game files' state at the lower left, the version and the keys at the lower right. One window over the whole page,
+// so the controller's cursor reaches the update's buttons from the column. The picture is the background's
+// (launcher_backdrop.cpp): the player's splash.png, or the logo's flag.
 static void page_main(float w, float h) {
-    float s = L.scale, left = 96 * s, cw = 440 * s, lh = ImGui::GetTextLineHeight();
-    bool ready = rt_game_present() && update_state().phase != UPDATE_FETCHING;
-    // the column's height, to centre it: logo and title, the gap, Play, the menu, the gap and Quit
+    float s = L.scale, left = 96 * s, cw = 440 * s, edge = 56 * s, lh = ImGui::GetTextLineHeight();
+    bool files = rt_game_present(), ready = files && update_state().phase != UPDATE_FETCHING;
+    // the column's height, to centre it: logo and title, the gap, Play, the controllers, the menu, the gap and Quit
     float mark = 84 * s, items = item_height(), gap = 12 * s;
-    float play_h = fmaxf(52.0f, 76 * s), col_h = mark + 48 * s + play_h + gap * 2 + items * 5 + 28 * s + items;
-    ImGui::SetNextWindowPos(ImVec2(left - 8 * s, fmaxf(32 * s, (h - col_h) * 0.45f) - 8 * s));
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(8 * s, 8 * s));   // room for the cursor's ring
+    float play_h = fmaxf(52.0f, 76 * s), pad_h = fmaxf(36.0f, 48 * s);
+    float col_h = mark + 48 * s + play_h + gap + pad_h + gap + items * 3 + 28 * s + items;
+    ImGui::SetNextWindowPos(ImVec2(0, 0));
+    ImGui::SetNextWindowSize(ImVec2(w, h));
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0, gap));
     ImGui::Begin("##main", nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove |
                                         ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoBackground |
-                                        ImGuiWindowFlags_AlwaysAutoResize);
+                                        ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_NoBringToFrontOnFocus);
     ImDrawList *dl = ImGui::GetWindowDrawList();
-    ImVec2 p = ImGui::GetCursorScreenPos();
+    ImVec2 p(left, fmaxf(40 * s, (h - col_h) * 0.45f));
+    ImGui::SetCursorScreenPos(p);
+    ImGui::BeginGroup();   // the column's lines start at its left edge, not the window's
     int v0 = dl->VtxBuffer.Size;
     launcher_logo(dl, p, mark);
     float ts = L.big->FontSize, tx = p.x + mark + 24 * s, by = p.y + (mark - ts - 4 * s - lh) * 0.5f;
     dl->AddText(L.big, ts, ImVec2(tx, by - ts * 0.06f), LOOK_TEXT, "Mario Kart World");
     dl->AddText(ImVec2(tx, by + ts + 4 * s), LOOK_HEADING, menu_text(UI_LAUNCH_SUBTITLE));
     intro_apply(dl, v0, intro(0));
-    float title_w = mark + 24 * s + L.big->CalcTextSizeA(ts, FLT_MAX, 0, "Mario Kart World").x;
-    ImGui::Dummy(ImVec2(fmaxf(cw, title_w), mark + 48 * s - gap));   // the window as wide as the title: it clips
-    update_row(cw);
+    ImGui::Dummy(ImVec2(cw, mark + 48 * s - gap));
     lastrun_row(cw);
     if (L.focus_main) {
         ImGui::SetKeyboardFocusHere();
@@ -346,7 +575,10 @@ static void page_main(float w, float h) {
     }
     v0 = dl->VtxBuffer.Size;
     static bool play_test = getenv("MKW_LAUNCHER_PLAY") != nullptr;   // (test) once, as the button does
-    bool play = play_button(menu_text(UI_LAUNCH_PLAY), ImVec2(cw, play_h), ready);
+    float chip_w = fminf(170 * s, cw * 0.4f);
+    bool play = play_button(menu_text(UI_LAUNCH_PLAY), ImVec2(cw - chip_w - gap, play_h), ready);
+    ImGui::SameLine(0, gap);
+    if (profile_chip(ImVec2(chip_w, play_h))) L.page = PAGE_PLAYERS;
     if (play || (play_test && ready)) {
         play_test = false;
         char state[PLAT_PATH_MAX + 32];
@@ -365,13 +597,14 @@ static void page_main(float w, float h) {
         }
     }
     intro_apply(dl, v0, intro(1));
-    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0, 0));
-    ImGui::Dummy(ImVec2(0, gap));
     v0 = dl->VtxBuffer.Size;
-    char profile[160];
-    snprintf(profile, sizeof profile, menu_text(UI_LAUNCH_PLAYER), launcher_player_name());
-    if (menu_item(profile, cw, true)) L.page = PAGE_PLAYERS;
+    if (pad_row(cw, pad_h)) {
+        settings_select(TAB_CONTROLS);
+        settings_opened();
+        L.page = PAGE_SETTINGS;
+    }
     intro_apply(dl, v0, intro(2));
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0, 0));
     v0 = dl->VtxBuffer.Size;
     if (menu_item(menu_text(UI_LAUNCH_SETTINGS), cw, true)) {
         L.page = PAGE_SETTINGS;
@@ -384,35 +617,39 @@ static void page_main(float w, float h) {
     v0 = dl->VtxBuffer.Size;
     if (menu_item(menu_text(UI_LAUNCH_MODS), cw, true)) L.page = PAGE_MODS;
     intro_apply(dl, v0, intro(5));
-    v0 = dl->VtxBuffer.Size;
-    if (menu_item(menu_text(UI_LAUNCH_SHORTCUT), cw, true)) make_shortcut();
-    intro_apply(dl, v0, intro(6));
     ImGui::Dummy(ImVec2(0, 28 * s));
     v0 = dl->VtxBuffer.Size;
     if (menu_item(menu_text(UI_LAUNCH_QUIT), cw, true)) L.result = LAUNCHER_QUIT;
-    intro_apply(dl, v0, intro(7));
+    intro_apply(dl, v0, intro(6));
     ImGui::PopStyleVar();
-    if (L.shortcut_note[0]) {
+    v0 = dl->VtxBuffer.Size;
+    if (files && !shortcut_asked()) {
+        shortcut_card(cw);
+    } else if (L.shortcut_note[0]) {
         ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + cw);
         ImGui::TextColored(col4(LOOK_DIM), "%s", L.shortcut_note);
         ImGui::PopTextWrapPos();
     }
+    ImGui::EndGroup();
+    // the update at the upper right, apart from the column it would push down
+    float uw = fminf(460 * s, w - left - cw - 2 * edge);
+    ImGui::SetCursorScreenPos(ImVec2(w - edge - uw, 40 * s));
+    update_card(uw);
+    ImGui::SetCursorScreenPos(ImVec2(left, h - 48 * s - lh));
+    if (status_link(files)) L.page = PAGE_FILES;
+    intro_apply(dl, v0, intro(7));
     ImGui::End();
     ImGui::PopStyleVar(2);
 
-    // the game files at the lower left; at the lower right that the port ships no game data, over the version
+    // at the lower right: that the port ships no game data and its version, over the keys
     ImDrawList *fg = ImGui::GetForegroundDrawList();
     int f0 = fg->VtxBuffer.Size;
-    float y = h - 48 * s - lh, r = lh * 0.24f;
-    const char *state = menu_text(ready ? UI_LAUNCH_FILES_READY : UI_LAUNCH_FILES_MISSING);
-    fg->AddCircleFilled(ImVec2(left + r, y + lh * 0.5f), r, ready ? LOOK_OK : LOOK_WARN, 16);
-    fg->AddText(ImVec2(left + r * 2 + 10 * s, y), ready ? LOOK_HEADING : LOOK_WARN, state);
-    char ver[96];
-    snprintf(ver, sizeof ver, "MKW Recomp %s", rt_port_version);
-    const char *note = menu_text(UI_LAUNCH_NO_GAME_DATA);
-    float right = w - 56 * s;
-    fg->AddText(ImVec2(right - ImGui::CalcTextSize(ver).x, y), LOOK_DIM, ver);
-    fg->AddText(ImVec2(right - ImGui::CalcTextSize(note).x, y - lh - 6 * s), LOOK_DIM, note);
+    char foot[200];
+    snprintf(foot, sizeof foot, "%s · MKW Recomp %s", menu_text(UI_LAUNCH_NO_GAME_DATA), rt_port_version);
+    const char *keys = menu_text(UI_LAUNCH_KEYS);
+    float right = w - edge, y = h - 48 * s - lh;
+    fg->AddText(ImVec2(right - ImGui::CalcTextSize(keys).x, y), LOOK_DIM, keys);
+    fg->AddText(ImVec2(right - ImGui::CalcTextSize(foot).x, y - lh - 6 * s), LOOK_DIM, foot);
     intro_apply(fg, f0, intro(7));
 }
 
@@ -571,8 +808,10 @@ static void page_files(float w, float h) {
     bool ready = rt_game_present();
     SetupState st = setup_state();
     ImGui::BeginDisabled(L.picking);
-    state_line(ready, menu_text(ready ? UI_LAUNCH_FILES_READY : UI_LAUNCH_FILES_MISSING));
-    update_row(ImGui::GetContentRegionAvail().x * 0.5f);   // a folder not set up starts on this page
+    char state[160];
+    files_state_text(ready, state, sizeof state);
+    state_line(ready, state);
+    update_card(fminf(ImGui::GetContentRegionAvail().x, 620 * L.scale));   // a folder not set up starts on this page
     if (L.updated[0]) {
         char note[300];
         snprintf(note, sizeof note, menu_text(UI_LAUNCH_UPDATED), L.updated);
@@ -592,6 +831,9 @@ static void page_files(float w, float h) {
         SDL_ShowOpenFolderDialog(picked, &L.directory_restart, L.win, cfg_game_dir(), false);
     }
     ImGui::EndDisabled();
+    ImGui::SameLine();
+    if (ImGui::Button(menu_text(UI_LAUNCH_SHORTCUT), ImVec2(0, act_h))) make_shortcut();
+    if (L.shortcut_note[0]) ImGui::TextColored(col4(LOOK_DIM), "%s", L.shortcut_note);
     ImGui::TextWrapped("%s", menu_text(UI_LAUNCH_GAME_DIR_HELP));
     if (cfg_from_env("MKW_GAME_DIR"))
         ImGui::TextDisabled("%s MKW_GAME_DIR", menu_text(UI_MENU_SET_BY_ENV));
@@ -640,13 +882,8 @@ static void page_files(float w, float h) {
         ImGui::PopStyleVar(2);
         ImGui::BeginDisabled(!L.source[0]);
         // the page's main action, in the blue: until the game is set up there is nothing else to do here
-        ImGui::PushStyleColor(ImGuiCol_Button, col4(LOOK_ACCENT));
-        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, col4(LOOK_ACCENT_HOT));
-        ImGui::PushStyleColor(ImGuiCol_ButtonActive, col4(LOOK_ACCENT_DOWN));
-        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1, 1, 1, 1));
-        if (ImGui::Button(menu_text(ready ? UI_LAUNCH_SETUP_AGAIN : UI_LAUNCH_SETUP), ImVec2(0, act_h)))
+        if (accent_button(menu_text(ready ? UI_LAUNCH_SETUP_AGAIN : UI_LAUNCH_SETUP), ImVec2(0, act_h)))
             setup_start(L.exe_dir, cfg_game_dir(), L.source, L.link_romfs);
-        ImGui::PopStyleColor(4);
         ImGui::EndDisabled();
         ImGui::EndDisabled();
         if (st.running) {
@@ -1087,6 +1324,7 @@ extern "C" int launcher_run(void) {
     }
     L.tools = setup_available(L.exe_dir);
     if (!rt_game_present() && !L.shot_at) L.page = PAGE_FILES;
+    pads_refresh();
     char state[PLAT_PATH_MAX * 3];
     snprintf(state, sizeof state, "%s/setup-state.json", cfg_game_dir());
     if (L.gb_open && rt_game_present()) L.page = PAGE_MODS;
@@ -1099,7 +1337,7 @@ extern "C" int launcher_run(void) {
             rt_log("launcher: the mkw-recomp: links (GameBanana 1-Click) could not be registered");
     }
     int updated = update_just_installed(L.exe_dir, L.updated, sizeof L.updated);
-    int other = !updated && !L.shot_at && setup_from_other_version(state);
+    int other = !updated && !L.shot_at && setup_from_other_version();
     if ((updated || other) && L.tools && plat_file_exists(state)) {
         if (other) rt_log("launcher: the game files were set up by another version: setting up again what changed");
         L.page = PAGE_FILES;   // set up again what the new version changed, from the last setup's copy
@@ -1146,6 +1384,7 @@ extern "C" int launcher_run(void) {
                 continue;
             }
             if (e.type == SDL_EVENT_QUIT) L.result = LAUNCHER_QUIT;
+            if (e.type == SDL_EVENT_GAMEPAD_ADDED || e.type == SDL_EVENT_GAMEPAD_REMOVED) pads_refresh();
             if (e.type == SDL_EVENT_KEY_DOWN && e.key.scancode == SDL_SCANCODE_F11 && !e.key.repeat)
                 SDL_SetWindowFullscreen(L.win, !(SDL_GetWindowFlags(L.win) & SDL_WINDOW_FULLSCREEN));
             if (L.shot_at) continue;
@@ -1169,8 +1408,9 @@ extern "C" int launcher_run(void) {
         backdrop_draw(bgl, (float)pw, (float)ph, L.page == PAGE_MAIN);
         if (L.page == PAGE_MAIN && L.intro_t0 > 0 && !L.shot_at)   // the flag: in over the intro's first 0.8 s
             launcher_fade(bgl, (float)pw, (float)ph, LOOK_BG, L.intro_t0, 0.8f);
-        if (L.page != L.shown) {
+        if (L.page != L.shown || frame == 1) {
             if (frame > 1 && !L.shot_at) L.page_t0 = ImGui::GetTime();
+            read_game_version();   // a setup may have changed the game files meanwhile
             L.shown = L.page;
         }
         switch (L.page) {

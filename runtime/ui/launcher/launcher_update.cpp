@@ -155,7 +155,9 @@ void update_check_start(const char *exe_dir) {
 void update_fetch_start(const char *exe_dir) {
     UpdateState s = update_state();
     char python[1200], script[1200];
-    if (s.phase != UPDATE_OFFER || g_proc || !find_tools(exe_dir, python, script, sizeof python)) return;
+    // offered, or a download that failed and is tried again (its release is still known)
+    bool again = s.phase == UPDATE_FAILED && s.tag[0] && s.bytes > 0;
+    if ((s.phase != UPDATE_OFFER && !again) || g_proc || !find_tools(exe_dir, python, script, sizeof python)) return;
     SDL_LockMutex(g_lock);
     g_state.phase = UPDATE_FETCHING;
     g_state.done = 0, g_state.total = s.bytes;
