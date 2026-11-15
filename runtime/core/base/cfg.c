@@ -98,7 +98,8 @@ static const CfgMeta metas[] = {
     {"VK_PRESENT", "mailbox", "mailbox|fifo|immediate", LIVE}, {"GPU_INDEX", "", NULL, RESTART},
     {"PERF_OVERLAY", "off", "off|fps|full", LIVE}, {"FPS", "auto", "auto|game|60|30|20|15", LIVE}, {"LOW_LATENCY", "1", "0|1", LIVE},
     {"FRAMEGEN", "off", "off|auto|2|3|4", LIVE},
-    {"UPSCALER", "fsr", "fsr|bilinear", LIVE}, {"SHARPNESS", "80", "0..100", LIVE},
+    // bilinear by default (Adrià 15/11/2026): FSR 1 only when the player picks it or Auto-set does
+    {"UPSCALER", "bilinear", "fsr|bilinear", LIVE}, {"SHARPNESS", "80", "0..100", LIVE},
     {"PICTURE_FIT", "keep", "keep|stretch", LIVE}, {"HDR", "auto", "auto|off", LIVE},   // auto: HDR when the display is (hdr6c, 12/11/2026)
     {"DEVICE_PROFILE", "auto", "auto|desktop|deck", RESTART},
     {"RESOLUTION", "original", "original|540|720|900|1080|1440|2160", RESTART},

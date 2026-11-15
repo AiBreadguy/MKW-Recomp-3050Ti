@@ -48,7 +48,11 @@ its issue, #N), `### Tested` (what was run from the packages before publishing) 
   660M at 15 fps a controller read reached its frame's display time in about 115 ms instead of 200. 20 and 15 apply
   only in races: menus and loading screens go at 30 at most, as on the console, and a cup's opening movie plays at
   60 from its first frame, so it can always be skipped (opened at 30 or 15 fps it was not skipped in 7 of 9 runs).
-  Frame generation pauses while a movie plays: the movie keeps its own rate instead of repeated frames.
+  Frame generation pauses while a movie plays: the movie keeps its own rate instead of repeated frames. At 15 fps
+  with 2x the made frame and the game's now go out evenly, 33 ms apart (they went 25 and 42 ms apart), and the full
+  performance overlay shows the game's frames and the screen's ("20/40 fps") instead of only the game's.
+- **Scaling to the window is bilinear by default**: AMD FSR 1 is on only when picked in Settings > Graphics or by
+  Auto-set.
 - **Issues**: a report of a known error is closed at once as its duplicate (a reply from its author reopens it), and
   a report on an older release, quiet for 3 days, is asked to try the latest and closed after 7 days without a reply.
 - **Motion controls for every player** (discussion 302): the gyroscope and accelerometer were read from player 1's
