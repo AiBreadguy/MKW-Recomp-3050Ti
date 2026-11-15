@@ -13,7 +13,6 @@
 EXEFS ?= game/exefs
 GEN ?= build/generated
 PATCHES ?= recomp/patches-mkw.txt
-SYSROOT ?= build/sysroot
 # The release tag without its v (0.1.11), or tag-commits-hash between tags:
 # the same source as the binary's own version (port_version in
 # tools/build/build.py: describe --tags --always --dirty, "dev" outside git).
@@ -34,7 +33,7 @@ help:
 	@echo "appimage-aarch64 dist for AArch64, packed as build/release/mkw-recomp-VERSION-aarch64.AppImage"
 	@echo "windows          player's zip build/release/mkw-recomp-VERSION-windows-x64.zip"
 	@echo "clean            remove build objects and packed releases, keep sources and caches"
-	@echo "Overrides: EXEFS, GEN, PATCHES (1.8.0: recomp/patches-mkw-180.txt), SYSROOT, VERSION"
+	@echo "Overrides: EXEFS, GEN, PATCHES (1.8.0: recomp/patches-mkw-180.txt), VERSION"
 
 build:
 	uv run tools/build/build.py --gen "$(GEN)" --exefs "$(EXEFS)"
@@ -61,7 +60,7 @@ sysroot:
 	uv run tools/build/sysroot.py --arch x86_64
 
 dist: sysroot
-	uv run tools/build/build.py --dist --runtime-only --sysroot "$(SYSROOT)"
+	uv run tools/build/build.py --dist --runtime-only --sysroot build/sysroot
 	uv run tools/build/dist.py --target linux
 
 appimage: dist
@@ -80,4 +79,4 @@ windows:
 	uv run tools/build/release.py --target windows --version "$(VERSION)"
 
 clean:
-	rm -rf build/obj build/obj-dist build/obj-dist-win build/release
+	rm -rf build/obj build/obj-dist build/obj-dist-win build/obj-dist-aarch64 build/release
