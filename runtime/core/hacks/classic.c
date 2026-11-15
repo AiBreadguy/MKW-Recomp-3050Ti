@@ -259,6 +259,20 @@ static int live_words(const uint32_t *w, uint64_t nw, uint64_t base, const Class
     return nhit;
 }
 
+// The scan takes seconds: a candidate may have been freed or reused before it is written.
+static int live_still_matches(const LiveHit *h, const ClassicSlot *sl) {
+    int original = 1, classic = 1;
+    for (int k = 0; k < 3; k++) {
+        uint64_t at = h->at + (uint64_t)k * (uint64_t)h->stride, end;
+        int state = plat_mem_state(at, at + 4, &end);
+        if ((state != PLAT_PROT_RW && state != PLAT_PROT_READ) || end < at + 4) return 0;
+        uint32_t value = __atomic_load_n((const uint32_t *)(uintptr_t)at, __ATOMIC_RELAXED);
+        original &= value == sl[h->first + k].orig;
+        classic &= value == sl[h->first + k].classic;
+    }
+    return original || classic;
+}
+
 static void live_scan(void *arg) {
     int on = (int)(intptr_t)arg, n = g_live.nslot, nhit = 0;
     const ClassicSlot *sl = g_live.slot;
@@ -301,16 +315,20 @@ static void live_scan(void *arg) {
             a = b;
         }
     }
+    int applied = 0;
     for (int h = 0; h < nhit; h++) {
+        if (!live_still_matches(&hit[h], sl)) continue;
         mem_thaw(hit[h].at, (uint64_t)hit[h].stride * 2 + 4);   // a frozen region takes writes again
+        if (!live_still_matches(&hit[h], sl)) continue;
         for (int k = 0; k < 3; k++) {
             const ClassicSlot *s = &sl[hit[h].first + k];
             __atomic_store_n((uint32_t *)(uintptr_t)(hit[h].at + (uint64_t)k * (uint64_t)hit[h].stride),
                              on ? s->classic : s->orig, __ATOMIC_RELAXED);
         }
+        applied++;
     }
-    rt_log("classic grand prix: %s from the next race: %d places in the game's memory (%.0f MiB in %.1f s)",
-           on ? "on" : "off", nhit, scanned / 1048576.0, (plat_now_ns() - t0) / 1e9);
+    rt_log("classic grand prix: %s from the next race: %d places in the game's memory (%d stale skipped, %.0f MiB in %.1f s)",
+           on ? "on" : "off", applied, nhit - applied, scanned / 1048576.0, (plat_now_ns() - t0) / 1e9);
     __atomic_store_n(&g_live.busy, 0, __ATOMIC_RELEASE);
 }
 
