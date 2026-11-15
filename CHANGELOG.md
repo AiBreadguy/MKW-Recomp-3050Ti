@@ -24,6 +24,10 @@ its issue, #N), `### Tested` (what was run from the packages before publishing) 
   other call the Windows C runtime rejects writes a crash report with the game's frames to `logs/mkw.log`.
 - **The setup refuses `exefs` and `romfs` from different game versions** (#315): 1.0.0's program with 1.8.0's game
   files passed the checks and the game crashed while warming up; the setup now says which version each one is.
+- **The GPU hang report comes before amdgpu resets the GPU** (#327 by @andreknieriem): on the Steam Deck the kernel
+  resets a GPU job after 5 s (SteamOS's `amdgpu.lockup_timeout`), as soon as the report of #297 was due, so three hangs
+  ended with no line in `mkw.log`. On amdgpu the report now comes after two fifths of that timeout (2 s on the Deck);
+  elsewhere it stays at 5 s, and `MKW_GPU_HANG_MS` sets it. Each stuck episode reports once, not only the first.
 
 ## 0.1.11
 
