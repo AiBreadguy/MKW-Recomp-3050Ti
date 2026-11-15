@@ -105,6 +105,9 @@ its issue, #N), `### Tested` (what was run from the packages before publishing) 
   later setup reused it and stopped in `translate.py` (`KeyError: 'BITS_…'` or `classes carry no Opcode constant`). A
   capture is now parsed aside and kept only when accepted, and a spec left broken by an earlier release is built
   again. Before 0.1.12: delete the game folder's `sm86` folder and run Set up again.
+- **A processor without AVX2 gets a message instead of nothing** (#262): the game is still built for AVX2 (a build
+  without it is planned in discussion 82), and on an AMD FX or an Intel Core older than the 4th generation `mkw.exe`
+  closed before writing any log. It now says so in a box before anything else runs.
 
 ## 0.1.11
 
