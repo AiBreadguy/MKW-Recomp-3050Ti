@@ -490,11 +490,15 @@ static float sample_at(Walk *w, int ch) {
     if (f == FMT_ADPCM) {
         if (cc != 1 || !v->in.extra_address || v->in.extra_size < 32) return 0;
         const int16_t *coef = (const int16_t *)(uintptr_t)v->in.extra_address;
-        if (w->abuf != (int32_t)w->index || w->aat > i + 2) {   /* (re)start this buffer: from its context, else from the frame boundary with carried history */
+        /* (re)start this buffer: from its context, else from the frame boundary with carried history. The address
+           too: a new voice's cursor is slot 0 at 0 (voice_reset), which the first buffer's context must not pass. */
+        if (w->abuf != (int32_t)w->index || w->aaddr != b->address || w->aat > i + 2) {
             if (b->context_address && b->context_size >= 6) { const int16_t *c = (const int16_t *)(uintptr_t)b->context_address; w->h1 = c[1]; w->h2 = c[2]; w->aat = (uint64_t)b->start; }
             else {
                 /* the history carried from the buffer before runs to its last sample, which a pitch above 1 can step
-                   over; not when that slot holds another buffer by now (its address) */
+                   over; not when that slot holds another buffer by now (its address). Then, or when the slot was
+                   refilled at the same address, the history is the one this walk reached in it (tests/c/t_adpcm.c:
+                   14 of 28.8 M samples without contexts). */
                 if (w->abuf >= 0 && w->abuf < 4 && w->abuf != (int32_t)w->index) {
                     const AudrenWaveBuffer *pb = &v->buffers[w->abuf];
                     if (pb->address == w->aaddr && pb->end > 0 && w->aat < (uint64_t)pb->end && (uint64_t)pb->end - w->aat <= 128)
