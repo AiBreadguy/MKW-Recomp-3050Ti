@@ -2,9 +2,11 @@
 // which test_adpcm.py cuts out into voice.inc with a decode counter) against an exact decode: each buffer decoded once,
 // from its start with its context or, without a context, from the frame boundary with the history the buffer played
 // before it ended on. That second rule is our model of the DSP, not a recording of the console.
-// Random buffers (predictor 0-7, scale 2^0..2^8), five sample rates, seven pitches up to 3.9, 400 voices of 300 render
-// frames of 240 samples. The voice advances as advance_voice in audren.c does (without its counters).
-// Usage: t_adpcm ctx|mixed   ctx: every buffer has a context, loops too; mixed: half of them have none, no loops.
+// Random buffers (predictor 0-7, scale 2^0..2^8), five sample rates, seven pitches up to 3.9 (the high case reaches
+// 192 kHz and pitch 64), 400 voices of 300 render frames of 240 samples. The voice advances as advance_voice in
+// audren.c does (without its counters).
+// Usage: t_adpcm ctx|mixed|high   ctx: every buffer has a context, loops too; mixed: half have none, no loops;
+// high: mixed contexts, with pitches up to 64 and sample rates up to 192 kHz to cross more than 128 samples at once.
 // Prints: output samples, samples that differ from the exact decode, decodes.
 #include <math.h>
 #include <stdio.h>
@@ -115,12 +117,15 @@ static void fill(ServerVoice *v, int slot, int with_ctx, int loops) {
 
 int main(int argc, char **argv) {
     int all_ctx = argc > 1 && !strcmp(argv[1], "ctx");
+    int high = argc > 1 && !strcmp(argv[1], "high");
     for (int i = 0; i < 8; i++) {
         for (int j = 0; j < 4096; j++) data[i][j] = (uint8_t)(j % 8 ? rnd() : ((rnd() % 8) << 4) | (rnd() % 9));
         for (int k = 0; k < 3; k++) ctx[i][k] = (int16_t)(rnd() * 2 - 32768);
     }
     static const double rates[] = {48000, 32000, 22050, 44100, 16000};
     static const float pitches[] = {1, 0.5f, 0.73f, 1.37f, 2.3f, 0.99f, 3.9f};
+    static const double high_rates[] = {192000, 32000, 22050, 44100, 16000};
+    static const float high_pitches[] = {64, 0.5f, 0.73f, 1.37f, 2.3f, 0.99f, 3.9f};
     unsigned long long outs = 0, wrong = 0;
     static float got[6][MAX_FRAME], want[MAX_FRAME];
     for (int voice = 0; voice < 400; voice++) {
@@ -128,7 +133,8 @@ int main(int argc, char **argv) {
         for (int s = 0; s < 4; s++) free((void *)(uintptr_t)v.buffers[s].address);
         memset(&v, 0, sizeof v);
         v.in.sample_format = FMT_ADPCM, v.in.channel_count = 1, v.in.extra_address = (uint64_t)(uintptr_t)coef, v.in.extra_size = 32;
-        v.in.sample_rate = (uint32_t)rates[voice % 5], v.in.pitch = pitches[voice % 7];
+        v.in.sample_rate = (uint32_t)(high ? high_rates[voice % 5] : rates[voice % 5]);
+        v.in.pitch = high ? high_pitches[voice % 7] : pitches[voice % 7];
         last_h1 = last_h2 = 0;
         for (int s = 0; s < 4; s++) fill(&v, s, all_ctx, all_ctx);
         v.state = SV_STARTED, v.in.in_use = 1;

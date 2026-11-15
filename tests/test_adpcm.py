@@ -56,3 +56,9 @@ def test_without_contexts_the_history_carries_over(adpcm: Path) -> None:
     outs, wrong, decodes = run(adpcm, "mixed")
     assert wrong < outs // 100000  # 14 of 28.8 M: a slot refilled before the walk decoded its last samples
     assert decodes < outs * 1.1  # 1.04 (3.08 before #331)
+
+
+def test_high_pitch_finishes_the_previous_buffer(adpcm: Path) -> None:
+    outs, wrong, _ = run(adpcm, "high")
+    assert outs == 400 * 300 * 240
+    assert wrong < 5500  # 6046 with a fixed 128-sample limit; remaining differences come from early slot refills

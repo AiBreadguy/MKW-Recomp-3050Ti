@@ -470,7 +470,7 @@ void audio_mixer_update_effects(AudioRenderer *r) {
 }
 
 /* ---------- voice decoding along the voice clock's sample path ---------- */
-typedef struct { ServerVoice *v; unsigned index; uint64_t offset; int32_t loops; uint8_t valid[4]; int ended; int16_t h1, h2; int32_t abuf; uint64_t aat, aaddr; } Walk;
+typedef struct { ServerVoice *v; unsigned index; uint64_t offset; int32_t loops; uint8_t valid[4]; int ended; int16_t h1, h2; int32_t abuf; uint64_t aat, aaddr, max_skip; } Walk;
 static int fmt_bytes(int f) { return f == FMT_PCM8 ? 1 : f == FMT_PCM16 ? 2 : f==FMT_PCM24?3:f == FMT_PCM32 || f == FMT_PCMF32 ? 4 : 0; }
 /* DSP-ADPCM: 8-byte frames of a predictor/scale byte and 14 4-bit samples; the history runs across samples. */
 static int16_t adpcm_next(Walk *w, const AudrenWaveBuffer *b, const int16_t *coef, uint64_t i) {
@@ -501,7 +501,8 @@ static float sample_at(Walk *w, int ch) {
                    14 of 28.8 M samples without contexts). */
                 if (w->abuf >= 0 && w->abuf < 4 && w->abuf != (int32_t)w->index) {
                     const AudrenWaveBuffer *pb = &v->buffers[w->abuf];
-                    if (pb->address == w->aaddr && pb->end > 0 && w->aat < (uint64_t)pb->end && (uint64_t)pb->end - w->aat <= 128)
+                    /* One output sample can advance by at most max_skip input samples; a larger gap is stale state. */
+                    if (pb->address == w->aaddr && pb->end > 0 && w->aat < (uint64_t)pb->end && (uint64_t)pb->end - w->aat <= w->max_skip)
                         while (w->aat < (uint64_t)pb->end) adpcm_next(w, pb, coef, w->aat++);
                 }
                 w->aat = (uint64_t)b->start - (uint64_t)b->start % 14;
@@ -545,7 +546,7 @@ static void walk_step(Walk *w) {   /* the same transitions as advance_voice in a
 /* Decodes `frames` output samples per channel into out[c][k]; the renderer advances the voice afterwards by the same amount. */
 static void voice_render(AudioRenderer *r, ServerVoice *v, float out[6][MAX_FRAME], int frames) {
     const double step = v->in.sample_rate * audio_pitch(v->in.pitch) / r->param.sample_rate;
-    Walk w = {v, v->index, v->offset, v->loops_done, {0}, 0, v->adpcm.history[0], v->adpcm.history[1], v->adpcm.buffer, v->adpcm.at, v->adpcm.address};
+    Walk w = {v, v->index, v->offset, v->loops_done, {0}, 0, v->adpcm.history[0], v->adpcm.history[1], v->adpcm.buffer, v->adpcm.at, v->adpcm.address, (uint64_t)step + 1};
     memcpy(w.valid, v->valid, sizeof w.valid);
     walk_skip_empty(&w);
     int cc = (int)v->in.channel_count; double frac = v->fraction;
