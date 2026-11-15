@@ -40,6 +40,12 @@ its issue, #N), `### Tested` (what was run from the packages before publishing) 
 - **The start screen says how the last game ended**: when it stopped with a known problem, it names the issue that
   follows it (no need to report it again) or the release that fixes it; an unknown error gets a button to the bug
   form, asking for `logs/mkw.log`.
+- **20 and 15 fps, at the race's real speed, and Low latency**: Settings > Graphics > Frame rate gains 20 and 15, and
+  Automatic now drops to them (it stopped at 30) when frames take too long, so a slow graphics card no longer plays
+  the race in slow motion: at 15 the time trial's clock runs at 0.998x real time and the karts drive as at 60. With
+  Frame generation at 2x, 15 fps shows as 30. New **Low latency** (on): the game used to prepare up to two frames
+  ahead of the screen; now it starts each one only as early as its work needs, measured frame by frame. On a Radeon
+  660M at 15 fps a controller read reached its frame's display time in about 115 ms instead of 200.
 - **Issues**: a report of a known error is closed at once as its duplicate (a reply from its author reopens it), and
   a report on an older release, quiet for 3 days, is asked to try the latest and closed after 7 days without a reply.
 - **Motion controls for every player** (discussion 302): the gyroscope and accelerometer were read from player 1's

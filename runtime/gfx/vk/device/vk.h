@@ -104,8 +104,15 @@ void vk_fsr_release(void);   // before the device goes away
 VkImageView vk_hdr_ui_target(VkCommandBuffer cb, uint32_t w, uint32_t h);
 void vk_hdr_ui_compose(VkCommandBuffer cb, VkImageView dst_view, VkFormat fmt, uint32_t w, uint32_t h);
 void vk_hdr_ui_release(void);   // before the device goes away
-// Queues the oldest present vk_present_blit or vk_present_blit_ahead left waiting.
-void vk_present_flip(void);
+// Queues the oldest present vk_present_blit or vk_present_blit_ahead left waiting; its present id (MKW_LATENCY with
+// present wait), else 0.
+uint64_t vk_present_flip(void);
+// ---- MKW_LATENCY (vk_latency.c): controller read to screen
+int vk_lat_on(void);
+uint64_t vk_lat_next_id(void);                                   // the next host present's id, 0 without present wait
+void vk_lat_flip(uint64_t slot, int first, int game, uint64_t id);   // a host present of the frame shown at slot
+void vk_lat_swapchain(int begin, VkSwapchainKHR sc);             // around vkCreateSwapchainKHR (it retires the old)
+void vk_lat_device(VkDevice device, int has_present_wait);                        // after the device: starts the present wait thread
 // vk_present_blit for frame generation: presents already waiting stay waiting, so the frames of one game frame are
 // all blitted at once and each vk_present_flip then queues the next at its time.
 void vk_present_blit_ahead(VkImage src, VkImageLayout layout, VkFormat fmt, int w, int h, const int crop[4]);
