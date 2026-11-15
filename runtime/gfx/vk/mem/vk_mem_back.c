@@ -234,7 +234,12 @@ static int alloc_chunk(VkCtx *c, uint64_t size, PhysChunk *out, int quiet) {
     VkBufferCreateInfo bi = {.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO, .size = size, .usage = pool_usage(c),
                              .sharingMode = VK_SHARING_MODE_EXCLUSIVE};
     VkResult res = vkCreateBuffer(c->device, &bi, NULL, &out->buf);
-    if (res != VK_SUCCESS) { rt_log("vk: physical pool: vkCreateBuffer failed (%d)", (int)res); return 0; }
+    if (res != VK_SUCCESS) {
+        *out = (PhysChunk){0};
+        if (quiet && res == VK_ERROR_OUT_OF_DEVICE_MEMORY) return -1;
+        rt_log("vk: physical pool: vkCreateBuffer failed (%d)", (int)res);
+        return 0;
+    }
     VkMemoryRequirements rb;
     vkGetBufferMemoryRequirements(c->device, out->buf, &rb);
     VkImageCreateInfo ii = {.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO, .imageType = VK_IMAGE_TYPE_2D,
@@ -296,6 +301,8 @@ void phys_back(PoolRec *r, uint32_t first, uint32_t last) {
         // textures, the open upload batch sent, the GPU waited for), outside phys_lock as the GPU wait may be long.
         // Steam Deck (1 GB UMA carve-out, low preset, 1.8.0 time trial, 13/11/2026): chunks failed while released
         // render targets held 3 256 MiB, and still failed with a vk_texture_trim and retry alone.
+        // Once per call: with MKW_PHYS_LAZY=0 a call backs a range of chunks, and the ones after the first that
+        // failed try the heap that relieve freed, without relieving again.
         if (got < 0) {
             relieved = 1;
             plat_mutex_unlock(&phys_lock);
