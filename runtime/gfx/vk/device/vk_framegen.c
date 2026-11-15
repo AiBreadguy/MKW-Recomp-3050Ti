@@ -410,8 +410,9 @@ int vk_fg_frame(VkImage src, int sw, int sh, const int crop[4], uint64_t at, VkI
     int gap = !F.last_at || at <= F.last_at || at - F.last_at > GAP_NS;
     if (!gap) {
         uint64_t d = at - F.last_at;
+        // no cap under GAP_NS: a 50 ms one held 15 fps (66.7 ms) at 50, so at 2x the made frame and the game's went
+        // out 25 and 41.7 ms apart instead of 33 and 33 (vis2: "game frame every 50.0 ms")
         if (d < 4000000) d = 4000000;
-        if (d > 50000000) d = 50000000;
         F.interval = F.interval ? (F.interval * 7 + d) / 8 : d;
     }
     F.last_at = at;
