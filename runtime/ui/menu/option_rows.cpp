@@ -87,6 +87,13 @@ void opt_begin(const char *id, float scale) {
     g_focus_req = false;
     if (g_take_first) ImGui::NavMoveRequestCancel();   // this frame's move goes to the first row instead
     g_hover.text[0] = g_focus.text[0] = g_first.text[0] = 0;
+    // A tab or page left behind with the mouse keeps g_mouse set, so on this one g_hover stays empty and opt_end would
+    // keep the pane describing the rows of the one before; the pane starts again with this page's own rows.
+    static char g_page[64] = "";
+    if (strcmp(g_page, id)) {
+        g_shown.text[0] = 0;
+        snprintf(g_page, sizeof g_page, "%s", id);
+    }
     g_indent = false;
     static const ImGuiKey kNav[] = {ImGuiKey_UpArrow,         ImGuiKey_DownArrow,        ImGuiKey_LeftArrow,
                                     ImGuiKey_RightArrow,      ImGuiKey_Tab,              ImGuiKey_GamepadDpadUp,
