@@ -190,6 +190,8 @@ uv run tools/build/build.py              # build/mkw; --target windows builds mk
 build/mkw
 ```
 
+Shortcuts for these flows and the release ones: `make build`, `make appimage` (`make help` lists them all).
+
 From a packed dump (`.nup`, `.nx`) and for Linux on AArch64: [tools/build/README.md](tools/build/README.md#a-packed-dump)
 and [its AArch64 section](tools/build/README.md#linux-aarch64).
 
