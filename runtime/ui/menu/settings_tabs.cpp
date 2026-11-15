@@ -24,7 +24,7 @@ extern "C" {
 void rt_log(const char *fmt, ...) __attribute__((format(printf, 1, 2)));
 }
 
-// ---- the lists the Screen and Game tabs build
+// ---- the lists the Screen and General tabs build
 enum { MAX_GPUS = 8 };
 static char g_gpu_names[MAX_GPUS][VK_MAX_PHYSICAL_DEVICE_NAME_SIZE];
 static int g_gpu_n = -1;   // -1: not listed yet
@@ -147,28 +147,22 @@ static const char *present_note(void) {
 }
 
 // ---- the tabs
+// The window and the picture's shape on it.
 static void tab_screen(float scale) {
     opt_begin("##screen", scale);
     opt_toggle("MKW_FULLSCREEN", UI_MENU_FULLSCREEN, UI_MENU_FULLSCREEN_DESC);
     row_window_size();
+    row_gpu();
     static const UiTextId present[] = {UI_MENU_PRESENT_MAILBOX, UI_MENU_PRESENT_VSYNC, UI_MENU_PRESENT_IMMEDIATE};
     opt_choice("MKW_VK_PRESENT", UI_MENU_PRESENT, present, 3, UI_MENU_PRESENT_DESC, present_note());
-    row_gpu();
-    static const UiTextId perf[] = {UI_MENU_PERF_OFF, UI_MENU_PERF_FPS, UI_MENU_PERF_FULL};
-    opt_choice("MKW_PERF_OVERLAY", UI_MENU_PERF_OVERLAY, perf, 3, UI_MENU_PERF_OVERLAY_DESC);
-    {   // the game's present interval (core/boot/game.c), live
-        static const char *const vals[] = {"auto", "30", "60"};
-        const char *names[3] = {menu_text(UI_MENU_FPS_AUTO), "30", "60"};
-        opt_choice_list("MKW_FPS", UI_MENU_FPS, vals, names, 3, UI_MENU_FPS_DESC);
-    }
-    {   // frames made between the game's (gfx/vk/device/vk_framegen.c), live
-        static const char *const vals[] = {"off", "auto", "2", "3", "4"};
-        const char *names[5] = {menu_text(UI_MENU_PERF_OFF), menu_text(UI_MENU_FPS_AUTO), "2x", "3x", "4x"};
-        opt_choice_list("MKW_FRAMEGEN", UI_MENU_FRAMEGEN, vals, names, 5, UI_MENU_FRAMEGEN_DESC);
-    }
     opt_group(UI_MENU_GRAPHICS);
     static const UiTextId fit[] = {UI_MENU_PICTURE_FIT_KEEP, UI_MENU_PICTURE_FIT_STRETCH};
     opt_choice("MKW_PICTURE_FIT", UI_MENU_PICTURE_FIT, fit, 2, UI_MENU_PICTURE_FIT_DESC);
+    {   // the cameras' aspect and the output's width (core/boot/patches.c, set aspect), read at start
+        static const char *const vals[] = {"16:9", "window", "21:9", "32:9", "48:9"};   // 48:9: three screens, #264
+        const char *names[5] = {"16:9", menu_text(UI_MENU_ASPECT_WINDOW), "21:9", "32:9", "48:9"};
+        opt_choice_list("MKW_ASPECT", UI_MENU_ASPECT, vals, names, 5, UI_MENU_ASPECT_DESC);
+    }
     {   // the game's own HDR picture on an HDR display (gfx/nvn/host/gfx_hdr.c), live
         static const char *const vals[] = {"auto", "off"};
         const char *names[2] = {menu_text(UI_MENU_FPS_AUTO), menu_text(UI_MENU_PERF_OFF)};
@@ -213,23 +207,12 @@ static void row_quality(void) {
             for (int k = 0; k < 4; k++) cfg_set(kQualityKeys[k], kPresets[p].v[k]);
 }
 
-// What the graphics card draws and how much: each row defaults to the console's.
+// What the graphics card draws and how much, each row the console's by default: the preset first with the four rows it
+// sets hanging under it, then the resolution, then how fast frames come.
 static void tab_graphics(float scale) {
     opt_begin("##graphics", scale);
-    {   // the game's internal render resolution (sdk/fs/romfs_res.c), read at start
-        static const char *const vals[] = {"original", "540", "720", "900", "1080", "1440", "2160"};   // 2160: issue #55
-        const char *names[7] = {menu_text(UI_MENU_RESOLUTION_ORIGINAL), "540p", "720p", "900p", "1080p", "1440p", "2160p"};
-        opt_choice_list("MKW_RESOLUTION", UI_MENU_RESOLUTION, vals, names, 7, UI_MENU_RESOLUTION_DESC);
-    }
-    {   // the cameras' aspect and the output's width (core/boot/patches.c, set aspect), read at start
-        static const char *const vals[] = {"16:9", "window", "21:9", "32:9", "48:9"};   // 48:9: three screens, #264
-        const char *names[5] = {"16:9", menu_text(UI_MENU_ASPECT_WINDOW), "21:9", "32:9", "48:9"};
-        opt_choice_list("MKW_ASPECT", UI_MENU_ASPECT, vals, names, 5, UI_MENU_ASPECT_DESC);
-    }
-    static const UiTextId up[] = {UI_MENU_UPSCALER_FSR, UI_MENU_UPSCALER_BILINEAR};
-    opt_choice("MKW_UPSCALER", UI_MENU_UPSCALER, up, 2, UI_MENU_UPSCALER_DESC);
-    opt_slider("MKW_SHARPNESS", UI_MENU_SHARPNESS, 0, 100, UI_MENU_SHARPNESS_DESC, 5, "%.0f %%");
     row_quality();
+    opt_indent(true);
     {   // a floor on anisotropic filtering (gfx/vk/tex/vk_tex_slots.c make_sampler)
         static const char *const vals[] = {"game", "2", "4", "8", "16"};
         const char *names[5] = {menu_text(UI_MENU_ANISO_GAME), "2x", "4x", "8x", "16x"};
@@ -249,15 +232,32 @@ static void tab_graphics(float scale) {
         const char *names[5] = {menu_text(UI_MENU_DETAIL_CONSOLE), "1024", "2048", "3072", "4096"};
         opt_choice_list("MKW_SHADOW_SIZE", UI_MENU_SHADOW, vals, names, 5, UI_MENU_SHADOW_DESC);
     }
+    opt_indent(false);
+    opt_group(UI_MENU_GROUP_RESOLUTION);
+    {   // the game's internal render resolution (sdk/fs/romfs_res.c), read at start
+        static const char *const vals[] = {"original", "540", "720", "900", "1080", "1440", "2160"};   // 2160: issue #55
+        const char *names[7] = {menu_text(UI_MENU_RESOLUTION_ORIGINAL), "540p", "720p", "900p", "1080p", "1440p", "2160p"};
+        opt_choice_list("MKW_RESOLUTION", UI_MENU_RESOLUTION, vals, names, 7, UI_MENU_RESOLUTION_DESC);
+    }
+    static const UiTextId up[] = {UI_MENU_UPSCALER_FSR, UI_MENU_UPSCALER_BILINEAR};
+    opt_choice("MKW_UPSCALER", UI_MENU_UPSCALER, up, 2, UI_MENU_UPSCALER_DESC);
+    if (strcmp(cfg_value("MKW_UPSCALER"), "fsr")) opt_disable_next(UI_MENU_SHARPNESS_FSR_ONLY);   // FSR's own pass
+    opt_slider("MKW_SHARPNESS", UI_MENU_SHARPNESS, 0, 100, UI_MENU_SHARPNESS_DESC, 5, "%.0f %%");
     static const UiTextId mode[] = {UI_MENU_MODE_DOCKED, UI_MENU_MODE_HANDHELD};
     opt_choice("MKW_OPERATION_MODE", UI_MENU_OPERATION_MODE, mode, 2, UI_MENU_OPERATION_MODE_DESC);
-    opt_end();
-}
-
-static void tab_game(float scale) {
-    opt_begin("##game", scale);
-    row_game_lang();
-    opt_toggle("MKW_LAN", UI_MENU_LAN, UI_MENU_LAN_DESC);   // sdk/ov/ov_socket.c, the lan set of recomp/patches-mkw.txt
+    opt_group(UI_MENU_GROUP_PERFORMANCE);
+    {   // the game's present interval (core/boot/game.c), live
+        static const char *const vals[] = {"auto", "30", "60"};
+        const char *names[3] = {menu_text(UI_MENU_FPS_AUTO), "30", "60"};
+        opt_choice_list("MKW_FPS", UI_MENU_FPS, vals, names, 3, UI_MENU_FPS_DESC);
+    }
+    {   // frames made between the game's (gfx/vk/device/vk_framegen.c), live
+        static const char *const vals[] = {"off", "auto", "2", "3", "4"};
+        const char *names[5] = {menu_text(UI_MENU_PERF_OFF), menu_text(UI_MENU_FPS_AUTO), "2x", "3x", "4x"};
+        opt_choice_list("MKW_FRAMEGEN", UI_MENU_FRAMEGEN, vals, names, 5, UI_MENU_FRAMEGEN_DESC);
+    }
+    static const UiTextId perf[] = {UI_MENU_PERF_OFF, UI_MENU_PERF_FPS, UI_MENU_PERF_FULL};
+    opt_choice("MKW_PERF_OVERLAY", UI_MENU_PERF_OVERLAY, perf, 3, UI_MENU_PERF_OVERLAY_DESC);
     opt_end();
 }
 
@@ -313,8 +313,10 @@ static void tab_controls(float scale) {
     binds_after_page();
 }
 
-static void tab_menu(float scale) {
-    opt_begin("##menu", scale);
+// The languages, LAN play and the update check: the Game and Menu tabs of before, two rows each.
+static void tab_general(float scale) {
+    opt_begin("##general", scale);
+    row_game_lang();
     // the order of cfg.c's MENU_LANG values, after Automatic
     static const UiTextId langs[] = {
         UI_MENU_MENU_LANG_AUTO, UI_MENU_LANGNAME_EN, UI_MENU_LANGNAME_JA, UI_MENU_LANGNAME_FR,
@@ -325,6 +327,7 @@ static void tab_menu(float scale) {
         UI_MENU_LANGNAME_TH,
     };
     opt_choice("MKW_MENU_LANG", UI_MENU_MENU_LANG, langs, sizeof langs / sizeof *langs, UI_MENU_MENU_LANG_DESC);
+    opt_toggle("MKW_LAN", UI_MENU_LAN, UI_MENU_LAN_DESC);   // sdk/ov/ov_socket.c, the lan set of recomp/patches-mkw.txt
     opt_toggle("MKW_UPDATE_CHECK", UI_MENU_UPDATE_CHECK, UI_MENU_UPDATE_CHECK_DESC);   // ui/launcher/launcher_update.cpp
     opt_end();
 }
@@ -495,9 +498,9 @@ static void tab_hacks(float scale) {
     opt_end();
 }
 
-static const UiTextId kTabNames[TAB_COUNT] = {UI_MENU_TAB_SCREEN, UI_MENU_TAB_GRAPHICS, UI_MENU_TAB_GAME,
-                                              UI_MENU_TAB_SOUND, UI_MENU_TAB_CONTROLS, UI_MENU_TAB_MENU,
-                                              UI_MENU_TAB_ADVANCED, UI_MENU_TAB_HACKS};
+static const UiTextId kTabNames[TAB_COUNT] = {UI_MENU_TAB_SCREEN,   UI_MENU_TAB_GRAPHICS, UI_MENU_TAB_SOUND,
+                                              UI_MENU_TAB_CONTROLS, UI_MENU_TAB_GENERAL,  UI_MENU_TAB_ADVANCED,
+                                              UI_MENU_TAB_HACKS};
 static int g_tab;               // the tab shown
 static int g_tab_request = -1;  // select this tab at the next layout; -1 none
 static int g_focus_page = -1;   // this tab's first row takes the cursor once it is shown; -1 none
@@ -523,7 +526,12 @@ void settings_tabs(float scale, float bottom) {
         for (int k = 0; k < TAB_COUNT; k++) {
             char label[128];
             snprintf(label, sizeof label, "  %s  ###tab%d", menu_text(kTabNames[k]), k);   // the id stays per language
-            if (!ImGui::BeginTabItem(label, nullptr, g_tab_request == k ? ImGuiTabItemFlags_SetSelected : 0)) continue;
+            // the testing and shortcut tabs in the dim colour: the ones most players need come first and stand out
+            bool quiet = k >= TAB_ADVANCED && k != g_tab;
+            if (quiet) ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
+            bool open = ImGui::BeginTabItem(label, nullptr, g_tab_request == k ? ImGuiTabItemFlags_SetSelected : 0);
+            if (quiet) ImGui::PopStyleColor();
+            if (!open) continue;
             g_tab = k;
             if (g_focus_page == k) {
                 opt_focus_first();
@@ -537,10 +545,9 @@ void settings_tabs(float scale, float bottom) {
             switch (k) {
             case TAB_SCREEN: tab_screen(scale); break;
             case TAB_GRAPHICS: tab_graphics(scale); break;
-            case TAB_GAME: tab_game(scale); break;
             case TAB_SOUND: tab_sound(scale); break;
             case TAB_CONTROLS: tab_controls(scale); break;
-            case TAB_MENU: tab_menu(scale); break;
+            case TAB_GENERAL: tab_general(scale); break;
             case TAB_ADVANCED: tab_advanced(scale); break;
             case TAB_HACKS: tab_hacks(scale); break;
             }

@@ -9,7 +9,7 @@ typedef enum {
     // Menu: window, tabs, bottom row. UI_MENU_FIRST..UI_MENU_LAST_ID carry English and Russian texts.
     UI_MENU_FIRST,
     UI_MENU_TITLE = UI_MENU_FIRST,
-    UI_MENU_TAB_SCREEN, UI_MENU_TAB_GAME, UI_MENU_TAB_SOUND, UI_MENU_TAB_CONTROLS, UI_MENU_TAB_MENU,
+    UI_MENU_TAB_SCREEN, UI_MENU_TAB_SOUND, UI_MENU_TAB_CONTROLS, UI_MENU_TAB_GENERAL,
     UI_MENU_TAB_ADVANCED, UI_MENU_TAB_GRAPHICS,
     UI_MENU_CONTINUE, UI_MENU_QUIT,
     UI_MENU_ON, UI_MENU_OFF, UI_MENU_AUTO, UI_MENU_DEFAULT_MARK,      // "default" beside the default value
@@ -37,6 +37,8 @@ typedef enum {
     UI_MENU_PICTURE_FIT, UI_MENU_PICTURE_FIT_DESC, UI_MENU_PICTURE_FIT_KEEP, UI_MENU_PICTURE_FIT_STRETCH,
     UI_MENU_HDR, UI_MENU_HDR_DESC,   // values: UI_MENU_FPS_AUTO, UI_MENU_PERF_OFF
     UI_MENU_SHARPNESS, UI_MENU_SHARPNESS_DESC,
+    UI_MENU_SHARPNESS_FSR_ONLY,   // under Sharpness when the upscaler is not AMD FSR 1
+    UI_MENU_GROUP_RESOLUTION, UI_MENU_GROUP_PERFORMANCE,   // the Graphics tab's group headings
 
     // Graphics
     UI_MENU_ANISO, UI_MENU_ANISO_DESC, UI_MENU_ANISO_GAME,
@@ -209,6 +211,7 @@ typedef enum {
     UI_LAUNCH_UPDATE_TITLE, UI_LAUNCH_UPDATE_DETAIL, UI_LAUNCH_UPDATE_NOW, UI_LAUNCH_WHATS_NEW, UI_LAUNCH_RETRY,
     UI_LAUNCH_FILES_READY_AS, UI_LAUNCH_PAD, UI_LAUNCH_PAD_NONE, UI_LAUNCH_CONFIGURE, UI_LAUNCH_SHORTCUT_ASK,
     UI_LAUNCH_SHORTCUT_MAKE, UI_LAUNCH_NOT_NOW, UI_LAUNCH_KEYS,
+    UI_LAUNCH_SETTINGS_NOTE,   // beside the Settings title: changes save at once and apply when the game starts
     UI_LAUNCH_NO_GAME_DATA,   // the start screen's lower right: the player brings the game, the port ships none
     // the last run's end (ui/launcher/launcher_lastrun.cpp): KNOWN "... #%d ..." (issue), FIXED "... %s ..." (tag),
     // OPEN "... #%d" (issue): the buttons open the issue or the bug form
