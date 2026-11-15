@@ -266,8 +266,12 @@ static void completion_main(void *arg) {
             // Once per stuck episode: a false report during a long load does not use up a later real one.
             static uint64_t stuck_since;   // this thread only
             static int hang_logged;
-            if (reached >= want) stuck_since = 0, hang_logged = 0;
-            else if (!stuck_since) stuck_since = kern_now_ns();
+            if (reached >= want) {
+                if (hang_logged)   // a long submission, not a hang: 4 of 22 Deck runs (0.1.11, 2 s), all in loads
+                    rt_log("vk: the GPU finished submission %llu after %.1f s: it was slow, not hung",
+                           (unsigned long long)want, (kern_now_ns() - stuck_since) / 1e9);
+                stuck_since = 0, hang_logged = 0;
+            } else if (!stuck_since) stuck_since = kern_now_ns();
             else if (hang && !hang_logged && kern_now_ns() - stuck_since >= hang) {
                 rt_log("vk: the GPU has not finished submission %llu in %.1f s and the driver reports no device loss",
                        (unsigned long long)want, hang / 1e9);
