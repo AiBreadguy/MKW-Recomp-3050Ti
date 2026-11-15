@@ -43,8 +43,11 @@ static int SDLCALL run(void *) {
     while (len && (line[len - 1] == '\n' || line[len - 1] == '\r')) line[--len] = 0;
     if (char *nl = strrchr(line, '\n')) line = nl + 1;
     line[strcspn(line, "\r")] = 0;
-    bool ok = code == 0 && !strncmp(line, "done", 4);
-    const char *rest = !strncmp(line, "done", 4) ? line + 4 : !strncmp(line, "error", 5) ? line + 5 : line;
+    // only the scripts' own words: "done" alone or "done ...", so a traceback mentioning one does not read as a result
+    bool is_done = !strncmp(line, "done", 4) && (!line[4] || line[4] == ' ');
+    bool is_err = !strncmp(line, "error", 5) && (!line[5] || line[5] == ' ');
+    bool ok = code == 0 && is_done;
+    const char *rest = is_done ? line + 4 : is_err ? line + 5 : line;
     while (*rest == ' ') rest++;
     rt_log("tools: %s %s: %s", g_cmd.argv[2], ok ? "done" : "failed", rest);
     finish(ok ? TOOL_DONE : TOOL_FAILED, rest);
