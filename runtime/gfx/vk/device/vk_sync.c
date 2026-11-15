@@ -214,25 +214,33 @@ static void cb_log(uint64_t values) {
     memset(cb_cost, 0, sizeof cb_cost), cb_values = 0;
 }
 
-// No frame's submission takes seconds; a load's uploads are many short ones. The report has to come before the kernel
-// resets the GPU: under amdgpu's lockup_timeout (5 s for gfx on the Steam Deck, SteamOS's
+// A slow load can leave the timeline still for seconds; if it finishes, the report below says it was slow. The report
+// has to come before the kernel resets the GPU: under amdgpu's lockup_timeout (5 s for gfx on the Steam Deck, SteamOS's
 // amdgpu.lockup_timeout=5000,...) a 5 s report lost that race and mkw ended without a line (three hangs on
 // 13-14/11/2026, "ring gfx_0.0.0 timeout ... Process mkw"). So on amdgpu it comes after two fifths of the gfx
 // timeout (2 s on the Deck, at least 1 s), and elsewhere after 5 s as #297 validated it for NVIDIA (Xid 109).
+// An unavailable, empty or zero parameter leaves the kernel default unknown: current upstream uses 2 s, older kernels
+// used 10 s (docs.kernel.org/gpu/amdgpu/module-parameters.html and docs.kernel.org/5.16/gpu/amdgpu.html). Use 1 s then
+// so the report precedes the shortest documented default, even though slow loads may produce more reports.
 // MKW_GPU_HANG_MS sets it (0: no report).
 static uint64_t hang_ns(const VkCtx *c) {
     const char *e = cfg_get("MKW_GPU_HANG_MS");
     if (e && *e) return strtoull(e, NULL, 10) * 1000000ull;
     uint64_t ms = 5000;
 #if defined(__linux__)
-    FILE *f = c->props.vendorID == 0x1002 ? fopen("/sys/module/amdgpu/parameters/lockup_timeout", "r") : NULL;
-    if (f) {
-        long t = 0;   // the gfx timeout in ms is the first of the list; 0 is the kernel's default (10 s), < 0 none
-        if (fscanf(f, "%ld", &t) == 1 && t > 0 && (uint64_t)t * 2 / 5 < ms) {
+    if (c->props.vendorID == 0x1002) {
+        FILE *f = fopen("/sys/module/amdgpu/parameters/lockup_timeout", "r");
+        long t = 0;   // the gfx timeout in ms is the first of the list; a negative value means no kernel timeout
+        int read = f ? fscanf(f, "%ld", &t) : 0;
+        if (read != 1 || t == 0) {
+            ms = 1000;
+            rt_log("vk: hang report after %llu ms (amdgpu lockup_timeout unavailable or default)",
+                   (unsigned long long)ms);
+        } else if (t > 0 && (uint64_t)t * 2 / 5 < ms) {
             ms = (uint64_t)t * 2 / 5 < 1000 ? 1000 : (uint64_t)t * 2 / 5;
             rt_log("vk: hang report after %llu ms (amdgpu lockup_timeout %ld ms)", (unsigned long long)ms, t);
         }
-        fclose(f);
+        if (f) fclose(f);
     }
 #else
     (void)c;

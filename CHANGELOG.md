@@ -75,8 +75,9 @@ its issue, #N), `### Tested` (what was run from the packages before publishing) 
 - **The GPU hang report comes before amdgpu resets the GPU** (#327 by @andreknieriem): on the Steam Deck the kernel
   resets a GPU job after 5 s (SteamOS's `amdgpu.lockup_timeout`), as soon as the report of #297 was due, so three hangs
   ended with no line in `mkw.log`. On amdgpu the report now comes after two fifths of that timeout (2 s on the Deck);
-  elsewhere it stays at 5 s, and `MKW_GPU_HANG_MS` sets it. Each stuck episode reports once, not only the first, and
-  one the GPU finishes after all says so ("it was slow, not hung").
+  an unset or unavailable kernel timeout uses 1 s (the documented default has been as short as 2 s), elsewhere it stays
+  at 5 s, and `MKW_GPU_HANG_MS` sets it. Each stuck episode reports once, not only the first, and one the GPU finishes
+  after all says so ("it was slow, not hung").
 
 ## 0.1.11
 
