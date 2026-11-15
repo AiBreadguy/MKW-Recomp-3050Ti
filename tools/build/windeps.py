@@ -1,19 +1,21 @@
 """Fetch what the Windows build needs into build/win: llvm-mingw (clang + lld for x86_64-w64-mingw32, UCRT) and the
 headers, import libraries and DLLs of SDL3, libusb, Opus, libvpx, zstd, Vulkan, VMA and xxHash.
 
-Why: the Windows exe is cross-compiled from Linux (tools/build/build.py --target windows) the way totk-pc-recomp builds
-its installer with --toolchain: llvm-mingw plus the MSYS2 UCRT64 packages (pins taken from its tools/make_release.py,
-MIT). SDL3 is built here from its source release with that toolchain: the upstream mingw package (and MSYS2's) has no
-libusb, and SDL starts the Switch 2 controllers over USB only through it (it sends their start-up commands on the
-second, non-HID interface; discussion #113). Built with SDL_HIDAPI_LIBUSB_SHARED, SDL3.dll loads libusb-1.0.dll (MSYS2,
-LGPL-2.1, beside it) when present. Every download is checked against its sha256; a mismatch stops.
+Why: tools/build/build.py --target windows builds the Windows exe with llvm-mingw plus the MSYS2 UCRT64 packages, the
+way totk-pc-recomp builds its installer with --toolchain (pins taken from its tools/make_release.py, MIT). It runs on
+Linux (a cross build, llvm-mingw's Linux build) or on Windows itself (llvm-mingw's Windows build, a .zip); the
+libraries are the same. SDL3 is built here from its source release with that toolchain: the upstream mingw package
+(and MSYS2's) has no libusb, and SDL starts the Switch 2 controllers over USB only through it (it sends their start-up
+commands on the second, non-HID interface; discussion #113). Built with SDL_HIDAPI_LIBUSB_SHARED, SDL3.dll loads
+libusb-1.0.dll (MSYS2, LGPL-2.1, beside it) when present. Every download is checked against its sha256; a mismatch stops.
 
 Layout:
     build/win/llvm-mingw/   the toolchain (bin/x86_64-w64-mingw32-clang)
     build/win/deps/         include/, lib/ (import and static libraries), bin/ (the DLLs mkw.exe loads)
 
 Usage: uv run tools/build/windeps.py [--dry-run]   (downloads cached in build/win/dl; ~250 MB unpacked; SDL needs cmake
-and ninja, ~10 s on 16 threads)
+and ninja, ~10 s on 16 threads; on Windows, when they are not on PATH, they are taken from MSYS2 UCRT64:
+C:/msys64/ucrt64/bin or MSYS2_UCRT64_BIN, as build.py does)
 """
 
 import argparse
@@ -34,6 +36,7 @@ MSYS2 = "https://repo.msys2.org/mingw/ucrt64/"
 LLVM_VERSION = "20261020"  # clang 23, as totk-pc-recomp's release
 SDL_VERSION = "3.4.18"
 HOST_WINDOWS = os.name == "nt"  # build.py on Windows itself: llvm-mingw's Windows build instead of its Linux one
+MSYS2_UCRT64_BIN = Path(os.environ.get("MSYS2_UCRT64_BIN", "C:/msys64/ucrt64/bin"))  # ninja (and cmake) on Windows
 # name: (url, sha256)
 PINS = {
     "llvm-mingw": (
@@ -158,6 +161,18 @@ def unpack_deps(archives: dict[str, Path]) -> None:
                     shutil.copyfileobj(src, f)
 
 
+def sdl_tools() -> None:
+    """cmake and ninja for build_sdl(), checked before any download. On Windows, MSYS2 UCRT64's bin goes at the end of
+    PATH when one of them is missing, as build.py does for ninja: what PATH already has stays first."""
+    tools = ("cmake", "ninja")
+    if HOST_WINDOWS and not all(map(shutil.which, tools)) and MSYS2_UCRT64_BIN.is_dir():
+        os.environ["PATH"] = f"{os.environ['PATH']}{os.pathsep}{MSYS2_UCRT64_BIN}"
+    missing = [t for t in tools if not shutil.which(t)]
+    if missing:
+        where = f" (on PATH or in {MSYS2_UCRT64_BIN}, MSYS2_UCRT64_BIN)" if HOST_WINDOWS else ""
+        sys.exit(f"{' and '.join(missing)} not found{where}: SDL3 builds with CMake and Ninja (tools/build/README.md)")
+
+
 def build_sdl(source: Path) -> None:
     """SDL3.dll, its import library, headers and licence into build/win/deps, built with llvm-mingw against the libusb
     package already unpacked there."""
@@ -198,6 +213,7 @@ def main() -> None:
         for name, (url, want) in PINS.items():
             print(f"{name}: {url} {want}")
         return
+    sdl_tools()
     DL.mkdir(parents=True, exist_ok=True)
     llvm, other = ("llvm-mingw-windows", "llvm-mingw") if HOST_WINDOWS else ("llvm-mingw", "llvm-mingw-windows")
     paths = {name: fetch(name) for name in PINS if name != other}
