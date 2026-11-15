@@ -100,6 +100,11 @@ its issue, #N), `### Tested` (what was run from the packages before publishing) 
   an unset or unavailable kernel timeout uses 1 s (the documented default has been as short as 2 s), elsewhere it stays
   at 5 s, and `MKW_GPU_HANG_MS` sets it. Each stuck episode reports once, not only the first, and one the GPU finishes
   after all says so ("it was slow, not hung").
+- **A setup that failed once in the shaders step no longer fails every time after** (#325, cause and fix by
+  @Talaric0): when NVIDIA's disassembler gave a garbled capture, the rejected spec was already in `sm86/`, and every
+  later setup reused it and stopped in `translate.py` (`KeyError: 'BITS_…'` or `classes carry no Opcode constant`). A
+  capture is now parsed aside and kept only when accepted, and a spec left broken by an earlier release is built
+  again. Before 0.1.12: delete the game folder's `sm86` folder and run Set up again.
 
 ## 0.1.11
 
