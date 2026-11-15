@@ -171,6 +171,8 @@ void vk_texture_release(const tex_t *t);   // TextureFinalize: the image stays f
 void vk_read_texels(const tex_t *t, const view_t *v, const NVNcopyRegion *r, uint8_t *dst, uint64_t row, uint64_t img);
 void vk_write_texels(const tex_t *t, const view_t *v, const NVNcopyRegion *r, const uint8_t *src, uint64_t row, uint64_t img);
 void vk_guest_written(uint64_t addr, uint64_t size);   // a host write write-watch may miss: textures there re-upload
+void vk_gpu_written_stamp(uint64_t addr, uint64_t size);   // a GPU write landed in guest memory (its fence): the same
+                                                           // stamp, but the mirror, which holds those bytes, skips it
 int vk_glyphs_due(void);      // per present: the button icon sheet's icons changed (ui/glyphs/glyphs.c); at most 10 times a second
 void vk_glyphs_redo(void);    // ... then, replays drained: it uploads again, redrawn
 int vk_pool_needs_drain(const pool_t *p);  // its GPU storage is guest memory: queued replays must be done first
@@ -279,6 +281,7 @@ int vk_mem_mirror_probe(uint64_t addr);   // --probe-vkexec: the pool at addr ge
 void vk_mem_class_log(const VkPhysicalDeviceProperties *p, const VkPhysicalDeviceMemoryProperties *m);   // once
 void vk_mem_census(uint64_t frame);               // at each present: pool census and traffic, logged at frame 1800 and,
                                                   // with MKW_TRACE=perf, every 1800 frames
+void vk_mem_replay_log(uint64_t frames);          // a capture replay's end: the mirror and shadow summaries over its frames
 // VRAM in use and its budget, summed over the DEVICE_LOCAL heaps. exact 1: VK_EXT_memory_budget (the whole process),
 // 0: this allocator's own allocations against the heap sizes. 0 when unknown.
 int vk_mem_vram(uint64_t *used, uint64_t *budget, int *exact);
