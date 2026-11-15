@@ -45,7 +45,10 @@ its issue, #N), `### Tested` (what was run from the packages before publishing) 
   the race in slow motion: at 15 the time trial's clock runs at 0.998x real time and the karts drive as at 60. With
   Frame generation at 2x, 15 fps shows as 30. New **Low latency** (on): the game used to prepare up to two frames
   ahead of the screen; now it starts each one only as early as its work needs, measured frame by frame. On a Radeon
-  660M at 15 fps a controller read reached its frame's display time in about 115 ms instead of 200.
+  660M at 15 fps a controller read reached its frame's display time in about 115 ms instead of 200. 20 and 15 apply
+  only in races: menus and loading screens go at 30 at most, as on the console, and a cup's opening movie plays at
+  60 from its first frame, so it can always be skipped (opened at 30 or 15 fps it was not skipped in 7 of 9 runs).
+  Frame generation pauses while a movie plays: the movie keeps its own rate instead of repeated frames.
 - **Issues**: a report of a known error is closed at once as its duplicate (a reply from its author reopens it), and
   a report on an older release, quiet for 3 days, is asked to try the latest and closed after 7 days without a reply.
 - **Motion controls for every player** (discussion 302): the gyroscope and accelerometer were read from player 1's

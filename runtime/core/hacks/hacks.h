@@ -17,6 +17,7 @@ int turbo_drop_present(uint64_t now_ns);   // 1: leave this frame out of the win
 // ---- skip movies (skip.c): MKW_SKIP_MOVIES=1 presses A while a cup opening plays
 void skip_file_opened(const char *path);   // fs_host.c: a romfs file opened
 void skip_movie_closed(void);              // ov_codec.c: a VP9 decoder finalized
+int skip_opening_playing(void);            // a cup opening's file opened and its decoder not closed yet (game.c)
 void skip_input(uint64_t *buttons);        // input.c: the buttons the game gets this tick
 
 // ---- fixed seed (seed.c): MKW_SEED=<number> for the system's random entropy

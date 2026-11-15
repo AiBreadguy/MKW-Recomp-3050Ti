@@ -326,11 +326,13 @@ int vk_fg_record(VkCommandBuffer cb, VkImage src, int sw, int sh, const int crop
     return made + 1;
 }
 
-// The frames per game frame the setting asks for now: 0 off (also under the turbo, whose frames are dropped anyway),
-// else 1..VK_FG_MAX, at most what the swapchain has room for
+// The frames per game frame the setting asks for now: 0 off (also under the turbo, whose frames are dropped anyway,
+// and while a full-screen movie plays: it goes at the game's own 30 or 60 and a made frame between two of its pictures
+// only repeats or smears them; vis3, 15/11/2026: "duplicado cuando no hace falta"), else 1..VK_FG_MAX, at most what
+// the swapchain has room for
 static int mult_now(void) {
     const char *v = cfg_value("MKW_FRAMEGEN");
-    if (!strcmp(v, "off") || turbo_speed() > 1) return 0;
+    if (!strcmp(v, "off") || turbo_speed() > 1 || ov_movie_playing()) return 0;
     int m;
     if (!strcmp(v, "auto")) {
         // The refreshes of the monitor that fit in one game frame, rounded down: rounded up a quarter early, a game
@@ -415,6 +417,8 @@ int vk_fg_frame(VkImage src, int sw, int sh, const int crop[4], uint64_t at, VkI
     F.last_at = at;
     int m = mult_now();
     if (m < 2) {   // off, or auto with no room between two refreshes: the caller presents the game's picture
+        if (F.logged_mult >= 2) rt_log("vk: frame generation paused (%s)", ov_movie_playing() ? "a movie plays" : "off");
+        F.logged_mult = m;
         F.have_prev = 0;
         return 0;
     }

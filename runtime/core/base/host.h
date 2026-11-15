@@ -340,6 +340,9 @@ void frame_jit_slack(uint64_t slot, int64_t slack);        // present thread: sl
 uint64_t frame_jit_start(uint64_t next_slot);              // acquire: the time to wait until, 0 none
 void frame_rate_host(uint64_t patch_page);                 // game.c MKW_FPS: register its host function (patches.c)
 void frame_rate_init(uint64_t patch_page);                 // and point the frame object's vtable slot at it
+void race_scene_host(uint64_t patch_page);                 // race_scene.c: register its host function (patches.c)
+void race_scene_init(uint64_t patch_page);                 // point the race nodes' start slots at it (after seqwatch)
+int race_scene_on(void);                                   // the game is in a race (game.c: 20 and 15 fps only there)
 // ---- boot (boot.c, main.c)
 typedef struct { const char *exefs, *romfs, *profile; int boot; double seconds; const char *shot, *gpu, *profile_base; } RtConfig;
                                                            // profile: the player's folder (core/base/players.h);

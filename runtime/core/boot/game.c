@@ -22,6 +22,7 @@
 
 #define FRAME_FIXED 0x210                         // frame object: fixed interval, 0 = the game picks
 #define FRAME_INTERVAL 0x214                      // frame object: the interval of this frame
+#define OUT_OF_RACE_MAX 2                         // 30 fps: the slowest interval outside a race
 #define FRAME_MEASURED 0x128                      // frame object: the time measured for the last frame (ticks)
 #define FRAME_HOST 0xfa0                          // patch page offset of host_frame_update (patches.c)
 #define SPEED_WINDOW_NS 5000000000ull
@@ -114,13 +115,25 @@ static void host_frame_update(Cpu *c) {
     // A full-screen movie (a cup opening) goes at the game's own choice, 60 or 30 as on the console, whatever MKW_FPS
     // says: at 15 it played at 15 and its skip (core/hacks/skip.c, presses counted in 60 Hz ticks) never landed
     // (gp15a, vis2: "no end of the movie after 600 ticks"; Adrià 15/11/2026: "el vídeo no se salta y se ve laggeado")
-    int movie = ov_movie_playing();
-    static int was_movie;
+    // A cup opening goes at 1 from its file's open until its decoder closes (core/hacks/skip.c): opened at 2 or 4 it
+    // was not skipped in 7 of 9 runs, at 1 in none of 13 (dn2), and the movie itself shows its pictures at their rate
+    int movie = ov_movie_playing(), opening = skip_opening_playing();
+    static int was_movie, was_opening;
     if (movie != was_movie) rt_log("game: %s", movie ? "a movie plays: the game picks the interval" : "movie over");
-    was_movie = movie;
-    int want = movie || !strcmp(fps, "game") ? 0
-             : !strcmp(fps, "auto")         ? auto_interval(c->x[0])
-                                            : fixed_interval(fps);
+    if (opening != was_opening) rt_log("game: %s", opening ? "a cup opening: interval 1" : "cup opening over");
+    was_movie = movie, was_opening = opening;
+    int want = opening                       ? 1
+             : movie || !strcmp(fps, "game") ? 0
+             : !strcmp(fps, "auto")          ? auto_interval(c->x[0])
+                                             : fixed_interval(fps);
+    // 20 and 15 only in a race (race_scene.c): menus and loads go at 30 at most, as on the console (Adrià 15/11/2026);
+    // a menu counting in 1/60 s steps risks at 3 or 4 what the cup opening showed
+    static int was_capped;
+    int capped = want > OUT_OF_RACE_MAX && !race_scene_on();
+    if (capped != was_capped)
+        rt_log("game: interval %d %s", want, capped ? "capped at 2 (out of a race)" : "no longer capped");
+    was_capped = capped;
+    if (capped) want = OUT_OF_RACE_MAX;
     if (want) {
         if (saved < 0) {
             saved = (int)*fixed;
