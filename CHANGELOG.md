@@ -159,6 +159,11 @@ Thanks to @ViniciusStanula, @andreknieriem, @Elenedeath, @fraustiz, @SavageCore,
 
 From these packages, before publishing:
 
+- The whole setup from the Linux AppImage (Radeon 660M, RADV, game 1.0.0) in 16 minutes (generate 57 s, compile 8 min,
+  shaders 6 min), its warm-up to the title without a fault.
+- The whole setup from the Windows zip (Windows 11, GTX 1050 Ti, 6 threads) in 23 minutes, its warm-up to the end
+  without a fault; its log now names the PC's real memory (`machine: 6 threads, 15.9 GB, 10.9 GB free`, where 0.1.11
+  said 8.0 GB).
 - Before the tag, on `main`: the race and title captures replayed on the Radeon 660M with the minimap's depth change
   (the same images as without it: 0.053 and 0.0015 against the game), the shaders step's spec built and rejected on
   purpose (a rejected capture leaves no spec behind), and the setup's tests (40 passed).
