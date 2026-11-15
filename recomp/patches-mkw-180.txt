@@ -1,6 +1,7 @@
 # Code patches of MKW 1.8.0 (exefs/main build id d00e4f399e411d06; recomp/versions.py). The same sets as
 # recomp/patches-mkw.txt (1.0.0), found again in this executable; that file says what each set does and why.
-# Every set of 1.0.0 is here (aspect, shadow and seed since 13/11/2026); seed has 18 of 1.0.0's 21 sites (below).
+# Every set of 1.0.0 is here (aspect, shadow and seed since 13/11/2026, lan since 15/11/2026); seed has 18 of 1.0.0's
+# 21 sites (below).
 #
 # Spin waits (tools/cpu/spin_waits.py --modules main,subsdk0,subsdk1,sdk, 11/11/2026).
 # main: 81 spin waits
