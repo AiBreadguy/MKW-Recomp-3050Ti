@@ -22,6 +22,7 @@
 // NotRexed), ported from WebGPU; the three-level search and the synthesis guards are ours.
 #include "vk.h"
 
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -63,6 +64,7 @@ static struct {
     // pacing (the present thread)
     uint64_t last_at, interval, frames, made_total;
     int logged_mult, auto_m;   // auto_m: MKW_FRAMEGEN=auto's factor now (mult_now)
+    int ticks[3], nticks, tpos;   // the last three display-time steps in 1/60 s: the game's interval (fits)
 } F;
 
 static VkPipeline make_pipeline(VkCtx *c, const uint32_t *code, size_t size, const int *spec, int nspec) {
@@ -330,11 +332,41 @@ int vk_fg_record(VkCommandBuffer cb, VkImage src, int sw, int sh, const int crop
 // and while a full-screen movie plays: it goes at the game's own 30 or 60 and a made frame between two of its pictures
 // only repeats or smears them; vis3, 15/11/2026: "duplicado cuando no hace falta"), else 1..VK_FG_MAX, at most what
 // the swapchain has room for
+// Whether m frames per game frame split the screen's refreshes evenly: every frame shown for the same whole number of
+// refreshes. The game runs at 60 / iv fps (its present interval, from the measured frame interval); m frames of it
+// at hz fit when hz * iv / (60 * m) is a whole number. 20 fps x2 on 60 Hz is 40 fps, frames held 1, 2, 1, 2
+// refreshes: judder (Adrià 15/11/2026); 20 x3 and 15 x4 are 60, 15 x2 is 30. hz unknown: taken as fitting.
+// The game's interval: the median of the last three steps between the pacer's display times, which go in whole 1/60 s
+// (the average in F.interval lags: 41.9 ms at 20 fps after a change, fga2), one hitch left out.
+static int game_ticks(void) {
+    if (!F.nticks) return 1;
+    int a = F.ticks[0], b = F.ticks[1 % F.nticks], c = F.ticks[2 % F.nticks];
+    int mid = a > b ? (b > c ? b : a > c ? c : a) : (a > c ? a : b > c ? c : b);
+    return mid < 1 ? 1 : mid;
+}
+
+static int fits(int m) {
+    double hz = vk_present_refresh_hz();
+    if (hz <= 0) return 1;
+    double k = hz * game_ticks() / (60.0 * m);
+    return k >= 0.97 && fabs(k - round(k)) < 0.03 * round(k);
+}
+
+static int vrr(void) { return cfg_bool("MKW_VRR"); }
+
 static int mult_now(void) {
     const char *v = cfg_value("MKW_FRAMEGEN");
     if (!strcmp(v, "off") || turbo_speed() > 1 || ov_movie_playing()) return 0;
     int m;
-    if (!strcmp(v, "auto")) {
+    if (!strcmp(v, "auto") && !vrr()) {
+        // the most frames that split the refreshes evenly; none (a 75 Hz screen: no game rate fits) shows the game's
+        // own frames. Within what the swapchain has room for.
+        int room = vk_present_ahead_max();
+        m = 1;
+        for (int k = VK_FG_MAX < room ? VK_FG_MAX : room; k >= 2 && m == 1; k--)
+            if (fits(k)) m = k;
+        return m;
+    } else if (!strcmp(v, "auto")) {   // a variable refresh screen shows any rate evenly: as many as fit in time
         // The refreshes of the monitor that fit in one game frame, rounded down: rounded up a quarter early, a game
         // frame of 46 ms at 60 Hz (2.76 refreshes) asked for 3x, made 2 frames where 1.76 fit, so the GPU made frames
         // never shown (fg3-auto: 1.1 made per game frame), and it switched between 2x and 3x every few seconds. Kept
@@ -354,6 +386,13 @@ static int mult_now(void) {
 }
 
 int vk_fg_wanted(void) { return strcmp(cfg_value("MKW_FRAMEGEN"), "off") != 0; }
+
+// The menu's note: a fixed 2x/3x/4x that does not split this screen's refreshes evenly at the game's rate now
+int vk_fg_uneven(void) {
+    const char *v = cfg_value("MKW_FRAMEGEN");
+    if (!strcmp(v, "off") || !strcmp(v, "auto") || vrr() || !F.frames) return 0;
+    return !fits(atoi(v));
+}
 
 // MKW_FG_DUMP=<game frame> (checking, with MKW_FG_DUMP_DIR, default "."): from that game frame of frame generation on,
 // four in a row as g<n>.png and the first frame made before each as m<n>.png, read back on the present thread (it
@@ -414,6 +453,9 @@ int vk_fg_frame(VkImage src, int sw, int sh, const int crop[4], uint64_t at, VkI
         // out 25 and 41.7 ms apart instead of 33 and 33 (vis2: "game frame every 50.0 ms")
         if (d < 4000000) d = 4000000;
         F.interval = F.interval ? (F.interval * 7 + d) / 8 : d;
+        F.ticks[F.tpos] = (int)llround((double)(at - F.last_at) / (1e9 / 60.0));
+        F.tpos = (F.tpos + 1) % 3;
+        if (F.nticks < 3) F.nticks++;
     }
     F.last_at = at;
     int m = mult_now();
@@ -453,7 +495,8 @@ int vk_fg_frame(VkImage src, int sw, int sh, const int crop[4], uint64_t at, VkI
         return 0;
     }
     if (dump) dump_write(F.fence[slot], n, *w, *h);
-    *step = F.interval / (uint64_t)n;
+    // the step from the game's interval in whole 1/60 s (the average lags ~8 frames behind a change of rate)
+    *step = (uint64_t)(game_ticks() * (1e9 / 60.0)) / (uint64_t)n;
     F.frames++, F.made_total += (uint64_t)(n - 1);
     if (m != F.logged_mult || F.frames % 1800 == 0) {   // ~1 min at 30 fps
         F.logged_mult = m;

@@ -51,6 +51,11 @@ its issue, #N), `### Tested` (what was run from the packages before publishing) 
   Frame generation pauses while a movie plays: the movie keeps its own rate instead of repeated frames. At 15 fps
   with 2x the made frame and the game's now go out evenly, 33 ms apart (they went 25 and 42 ms apart), and the full
   performance overlay shows the game's frames and the screen's ("20/40 fps") instead of only the game's.
+  Frame generation's **Automatic** now makes only as many frames as split the screen's refreshes evenly: on 60 Hz,
+  2x at 30 fps, 3x at 20 and 4x at 15, all 60, where 2x at 20 (40 fps) held frames 1, 2, 1, 2 refreshes and
+  juddered. A 75 Hz screen, where no game rate fits, shows the game's own frames. New **Variable refresh screen**
+  (off): with FreeSync or G-Sync on, Automatic makes as many as fit in time instead. A fixed 2x, 3x or 4x that
+  does not fit the screen shows a note under it.
 - **Scaling to the window is bilinear by default**: AMD FSR 1 is on only when picked in Settings > Graphics or by
   Auto-set.
 - **Issues**: a report of a known error is closed at once as its duplicate (a reply from its author reopens it), and

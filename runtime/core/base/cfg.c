@@ -52,7 +52,7 @@ static const char *const known[] = {
     "REPLAY_CHECK", "RESOLUTION", "RESOLVE_CHECK", "ROMFS", "RTSTATS", "ROMFS_MODS", "ROMFS_PATCHES",
     "RUMBLE", "RUMBLE_CURVE", "RUMBLE_STRENGTH", "RUMBLE_TRIGGERS",
     "SHADER_MEMO", "SHADOW_SIZE", "SHARED_FONTS", "SHARPNESS", "SHORTCUT_ASKED", "SHOTS", "SHOTS_DIR", "SHOTS_FULL", "SPARSE_IMAGES", "SPARSE_MIB", "SPARSE_NO_BUFFER", "SPIN", "SPIN_HANDOFF_US", "SPLIT_DRAWS", "SPLIT_US", "STICK_DEADZONE", "SWITCH2", "SWKBD_ANSWER",
-    "SKIP_PROGRAMS", "SWKBD_TEST", "TEX_ALIAS", "TEX_MEMO", "TEX_QUALITY", "TEX_RELEASED_MIB", "TIMER_1MS", "TRACE", "TURBO", "TURBO_SPEED", "SKIP_MOVIES", "SEED", "UNLOCK_ALL", "QUICK_RACE", "FREEZE_KEYS", "QUALITY", "TRACE_UBO", "TRACE_UBO_OUT", "UBO_SNAPSHOT", "UPSCALER", "VK_DYN_VERTEX", "VK_NO_FLOAT64",
+    "SKIP_PROGRAMS", "SWKBD_TEST", "TEX_ALIAS", "TEX_MEMO", "TEX_QUALITY", "TEX_RELEASED_MIB", "TIMER_1MS", "TRACE", "TURBO", "TURBO_SPEED", "SKIP_MOVIES", "SEED", "UNLOCK_ALL", "QUICK_RACE", "FREEZE_KEYS", "QUALITY", "TRACE_UBO", "TRACE_UBO_OUT", "UBO_SNAPSHOT", "UPSCALER", "VRR", "VK_DYN_VERTEX", "VK_NO_FLOAT64",
     "VK_PRESENT", "VK_RECORDER", "VK_SSBO_ALIGN", "VK_SUBGROUP", "VK_SUBGROUP_PIN", "VK_TEX_POOL_MIN", "VK_VALIDATION", "VOLUME", "VRAM_HEADROOM", "VRAM_LOG", "VRAM_MARGIN", "VS_OUTS",
     "UPDATE_AS", "UPDATE_CHECK", "UPDATE_REPO", "WINDOW_SIZE", "ZSTD_CHECK", "ZSTD_NATIVE",
 };
@@ -61,7 +61,7 @@ static const char *const known[] = {
 static const struct { const char *key, *section; } sections[] = {
     {"FULLSCREEN", "display"}, {"WINDOW_SIZE", "display"}, {"PERF_OVERLAY", "display"}, {"VK_PRESENT", "display"},
     {"GPU_INDEX", "display"}, {"UPSCALER", "display"}, {"HDR", "display"}, {"SHARPNESS", "display"}, {"PICTURE_FIT", "display"},
-    {"DEVICE_PROFILE", "display"}, {"RESOLUTION", "display"}, {"ASPECT", "display"}, {"FPS", "display"}, {"FRAMEGEN", "display"}, {"LOW_LATENCY", "display"},
+    {"DEVICE_PROFILE", "display"}, {"RESOLUTION", "display"}, {"ASPECT", "display"}, {"FPS", "display"}, {"FRAMEGEN", "display"}, {"VRR", "display"}, {"LOW_LATENCY", "display"},
     {"QUALITY", "graphics"}, {"ANISO", "graphics"}, {"TEX_QUALITY", "graphics"}, {"DETAIL_DISTANCE", "graphics"}, {"SHADOW_SIZE", "graphics"},
     {"MENU_LANG", "language"}, {"LANG", "language"}, {"OPERATION_MODE", "language"}, {"LAN", "language"},
     {"VOLUME", "audio"}, {"AUDIO_CHANNELS", "audio"}, {"BACKGROUND_MUTE", "audio"},
@@ -98,6 +98,9 @@ static const CfgMeta metas[] = {
     {"VK_PRESENT", "mailbox", "mailbox|fifo|immediate", LIVE}, {"GPU_INDEX", "", NULL, RESTART},
     {"PERF_OVERLAY", "off", "off|fps|full", LIVE}, {"FPS", "auto", "auto|game|60|30|20|15", LIVE}, {"LOW_LATENCY", "1", "0|1", LIVE},
     {"FRAMEGEN", "off", "off|auto|2|3|4", LIVE},
+    // the screen has variable refresh (FreeSync, G-Sync), told by the player: Vulkan does not say whether it is on.
+    // Off, frame generation's Automatic uses only the factors that split the refreshes evenly (vk_framegen.c fits)
+    {"VRR", "0", "0|1", LIVE},
     // bilinear by default (Adrià 15/11/2026): FSR 1 only when the player picks it or Auto-set does
     {"UPSCALER", "bilinear", "fsr|bilinear", LIVE}, {"SHARPNESS", "80", "0..100", LIVE},
     {"PICTURE_FIT", "keep", "keep|stretch", LIVE}, {"HDR", "auto", "auto|off", LIVE},   // auto: HDR when the display is (hdr6c, 12/11/2026)
