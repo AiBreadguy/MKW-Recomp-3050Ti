@@ -105,6 +105,11 @@ its issue, #N), `### Tested` (what was run from the packages before publishing) 
   later setup reused it and stopped in `translate.py` (`KeyError: 'BITS_…'` or `classes carry no Opcode constant`). A
   capture is now parsed aside and kept only when accepted, and a spec left broken by an earlier release is built
   again. Before 0.1.12: delete the game folder's `sm86` folder and run Set up again.
+- **The minimap without garbage on AMD** (#365, diagnosed by @elenotrindade): AMD lays out some depth buffers larger
+  than the Switch 2 does (the minimap's 676x676 one takes 0x2e0170 bytes for 0x204000), and bound at the game's address
+  its extra bytes overwrote the minimap's colour target right after it. A depth or stencil buffer that does not fit its
+  space now gets its own memory (`MKW_POOL_SPILL=1` restores the old binding). Same picture on the race and title
+  captures on a Radeon 660M, where 7 depth buffers did not fit.
 - **A processor without AVX2 gets a message instead of nothing** (#262): the game is still built for AVX2 (a build
   without it is planned in discussion 82), and on an AMD FX or an Intel Core older than the 4th generation `mkw.exe`
   closed before writing any log. It now says so in a box before anything else runs.
