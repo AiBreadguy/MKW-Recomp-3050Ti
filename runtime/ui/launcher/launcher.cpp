@@ -665,13 +665,16 @@ static void page_main(float w, float h) {
         ImGui::PopTextWrapPos();
     }
     ImGui::EndGroup();
-    // the update at the upper right, apart from the column it would push down
+    // the update at the upper right, apart from the column it would push down; a card narrower than its own buttons
+    // would wrap them, so on a window too narrow for both it is not drawn here (the files page shows it regardless)
     float uw = fminf(460 * s, w - left - cw - 2 * edge);
-    ImGui::SetCursorScreenPos(ImVec2(w - edge - uw, 40 * s));
-    update_card(uw);
+    if (uw >= 360 * s) {
+        ImGui::SetCursorScreenPos(ImVec2(w - edge - uw, 40 * s));
+        update_card(uw);
+    }
     ImGui::SetCursorScreenPos(ImVec2(left, h - 48 * s - lh));
     if (status_link(files)) L.page = PAGE_FILES;
-    intro_apply(dl, v0, intro(7));
+    intro_apply(dl, v0, intro(8));   // the lower left comes in last, after Quit's own intro(7)
     ImGui::End();
     ImGui::PopStyleVar(2);
 
