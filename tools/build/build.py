@@ -404,7 +404,8 @@ def main() -> None:
     args.out = args.out or ROOT / ("build/obj" + ("-dist" if dist else "") + ("-win" if target is WINDOWS else "")
                                    + (f"-{ARCH}" if cross else ""))  # fmt: skip
     if HOST_WINDOWS and not shutil.which("ninja") and (MSYS2_UCRT64_BIN / "ninja.exe").is_file():
-        os.environ["PATH"] = f"{MSYS2_UCRT64_BIN}{os.pathsep}{os.environ['PATH']}"
+        # at the end, as windeps.py does: what PATH already has stays first
+        os.environ["PATH"] = f"{os.environ['PATH']}{os.pathsep}{MSYS2_UCRT64_BIN}"
     for tool in (target.cc, target.cxx, "ninja", target.ar):
         if not shutil.which(tool):
             sys.exit(f"{tool} not found" + (" (uv run tools/build/windeps.py)" if target is WINDOWS else ""))
