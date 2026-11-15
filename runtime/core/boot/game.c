@@ -111,7 +111,16 @@ static void host_frame_update(Cpu *c) {
     static int saved = -1;
     uint32_t *fixed = (uint32_t *)(uintptr_t)(c->x[0] + FRAME_FIXED);
     const char *fps = cfg_value("MKW_FPS");
-    int want = !strcmp(fps, "game") ? 0 : !strcmp(fps, "auto") ? auto_interval(c->x[0]) : fixed_interval(fps);
+    // A full-screen movie (a cup opening) goes at the game's own choice, 60 or 30 as on the console, whatever MKW_FPS
+    // says: at 15 it played at 15 and its skip (core/hacks/skip.c, presses counted in 60 Hz ticks) never landed
+    // (gp15a, vis2: "no end of the movie after 600 ticks"; Adrià 15/11/2026: "el vídeo no se salta y se ve laggeado")
+    int movie = ov_movie_playing();
+    static int was_movie;
+    if (movie != was_movie) rt_log("game: %s", movie ? "a movie plays: the game picks the interval" : "movie over");
+    was_movie = movie;
+    int want = movie || !strcmp(fps, "game") ? 0
+             : !strcmp(fps, "auto")         ? auto_interval(c->x[0])
+                                            : fixed_interval(fps);
     if (want) {
         if (saved < 0) {
             saved = (int)*fixed;
