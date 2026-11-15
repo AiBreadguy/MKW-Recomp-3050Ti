@@ -319,6 +319,7 @@ int rt_knob(const char *name, const char *def);
 extern volatile uint64_t nvn_timestamp_last; // nvn_ext.c: the counter timestamp the game read last (ticks)
 void frame_step_present(uint64_t display_ns, int interval); // nvnQueuePresentTexture: the frame's display time and
                                                            // present interval (60 Hz ticks)
+int frame_present_interval(void);   // the interval of the game's last present (1-4), any thread: frame generation's rate
 // MKW_FPS=auto (fps_auto.c): the present interval 1-4 from each frame's measured time, with hysteresis
 #define FPS_AUTO_MAX 4
 #define FPS_AUTO_HIST 120

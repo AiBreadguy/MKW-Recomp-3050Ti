@@ -64,7 +64,6 @@ static struct {
     // pacing (the present thread)
     uint64_t last_at, interval, frames, made_total;
     int logged_mult, auto_m;   // auto_m: MKW_FRAMEGEN=auto's factor now (mult_now)
-    int ticks[3], nticks, tpos;   // the last three display-time steps in 1/60 s: the game's interval (fits)
 } F;
 
 static VkPipeline make_pipeline(VkCtx *c, const uint32_t *code, size_t size, const int *spec, int nspec) {
@@ -336,13 +335,12 @@ int vk_fg_record(VkCommandBuffer cb, VkImage src, int sw, int sh, const int crop
 // refreshes. The game runs at 60 / iv fps (its present interval, from the measured frame interval); m frames of it
 // at hz fit when hz * iv / (60 * m) is a whole number. 20 fps x2 on 60 Hz is 40 fps, frames held 1, 2, 1, 2
 // refreshes: judder (Adrià 15/11/2026); 20 x3 and 15 x4 are 60, 15 x2 is 30. hz unknown: taken as fitting.
-// The game's interval: the median of the last three steps between the pacer's display times, which go in whole 1/60 s
-// (the average in F.interval lags: 41.9 ms at 20 fps after a change, fga2), one hitch left out.
+// The game's interval in 1/60 s: what it asked NVN for (game.c), not a measure. The average in F.interval lags ~8
+// frames behind a change (fga2: 41.9 ms at 20 fps), and steps between display times grow when a frame is late: a
+// median of the last three read 5 at 15 fps, no factor fit and frame generation paused (fga3, frames 1670-1675).
 static int game_ticks(void) {
-    if (!F.nticks) return 1;
-    int a = F.ticks[0], b = F.ticks[1 % F.nticks], c = F.ticks[2 % F.nticks];
-    int mid = a > b ? (b > c ? b : a > c ? c : a) : (a > c ? a : b > c ? c : b);
-    return mid < 1 ? 1 : mid;
+    int iv = frame_present_interval();
+    return iv < 1 ? 1 : iv;
 }
 
 static int fits(int m) {
@@ -453,9 +451,6 @@ int vk_fg_frame(VkImage src, int sw, int sh, const int crop[4], uint64_t at, VkI
         // out 25 and 41.7 ms apart instead of 33 and 33 (vis2: "game frame every 50.0 ms")
         if (d < 4000000) d = 4000000;
         F.interval = F.interval ? (F.interval * 7 + d) / 8 : d;
-        F.ticks[F.tpos] = (int)llround((double)(at - F.last_at) / (1e9 / 60.0));
-        F.tpos = (F.tpos + 1) % 3;
-        if (F.nticks < 3) F.nticks++;
     }
     F.last_at = at;
     int m = mult_now();
@@ -495,7 +490,8 @@ int vk_fg_frame(VkImage src, int sw, int sh, const int crop[4], uint64_t at, VkI
         return 0;
     }
     if (dump) dump_write(F.fence[slot], n, *w, *h);
-    // the step from the game's interval in whole 1/60 s (the average lags ~8 frames behind a change of rate)
+    // the step from the game's interval in whole 1/60 s (the average lags ~8 frames behind a change of rate; under the
+    // turbo frame generation is off)
     *step = (uint64_t)(game_ticks() * (1e9 / 60.0)) / (uint64_t)n;
     F.frames++, F.made_total += (uint64_t)(n - 1);
     if (m != F.logged_mult || F.frames % 1800 == 0) {   // ~1 min at 30 fps

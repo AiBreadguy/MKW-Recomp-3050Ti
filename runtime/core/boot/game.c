@@ -56,8 +56,13 @@ static void speed_note(int interval) {
     sp.t0 = now, sp.clock0 = clock, sp.frames = sp.changes = 0;
 }
 
+static _Atomic int last_interval = 1;
+
+int frame_present_interval(void) { return atomic_load_explicit(&last_interval, memory_order_relaxed); }
+
 void frame_step_present(uint64_t display_ns, int interval) {
     (void)display_ns;
+    atomic_store_explicit(&last_interval, interval > 0 ? interval : 1, memory_order_relaxed);
     atomic_fetch_add_explicit(&ticks, interval > 0 ? (uint64_t)interval : 1, memory_order_relaxed);
     speed_note(interval);
 }
