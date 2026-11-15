@@ -16,6 +16,7 @@
 #include <string.h>
 
 #include "cfg.h"
+#include "hacks.h"
 #include "host.h"
 #include "version.h"
 
@@ -93,10 +94,14 @@ static int fixed_interval(const char *fps) {
 static int auto_interval(uint64_t obj) {
     static FpsAuto a;
     static int ready;
+    static uint64_t last;   // when the last frame began: the real period, which the game's measure can fall short of
     if (!ready) fps_auto_reset(&a), ready = 1;
+    uint64_t now = kern_now_ns();
     double ms = (double)*(const int64_t *)(uintptr_t)(obj + FRAME_MEASURED) * RT_TICK_NS / 1e6;
-    int prev = a.iv, iv = fps_auto_step(&a, ms);
-    if (iv != prev) rt_log("game: auto interval %d -> %d (frame %.1f ms)", prev, iv, ms);
+    double real = last ? (now - last) / 1e6 / turbo_speed() : 0;
+    last = now;
+    int prev = a.iv, iv = fps_auto_step(&a, ms, real);
+    if (iv != prev) rt_log("game: auto interval %d -> %d (frame %.1f ms, real %.1f ms)", prev, iv, ms, real);
     return iv;
 }
 

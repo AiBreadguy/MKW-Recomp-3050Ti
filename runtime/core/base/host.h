@@ -322,9 +322,14 @@ void frame_step_present(uint64_t display_ns, int interval); // nvnQueuePresentTe
 // MKW_FPS=auto (fps_auto.c): the present interval 1-4 from each frame's measured time, with hysteresis
 #define FPS_AUTO_MAX 4
 #define FPS_AUTO_HIST 120
-typedef struct { double hist[FPS_AUTO_HIST]; unsigned head, n, since; int iv; } FpsAuto;
+typedef struct {
+    double hist[FPS_AUTO_HIST], real[8];
+    unsigned head, n, since, n_real, hold, hold_s;
+    int iv, downed;
+} FpsAuto;
 void fps_auto_reset(FpsAuto *a);                           // interval 1, no history
-int fps_auto_step(FpsAuto *a, double measured_ms);         // one frame's measured time in, the interval to use out
+int fps_auto_step(FpsAuto *a, double measured_ms, double real_ms);   // a frame's game measure and real period in,
+                                                                     // the interval to use out
 int probe_fps(void);                                       // fps_probe.c: the controller on synthetic frame times
 void lat_input_read(void);                                 // vk_latency.c MKW_LATENCY: the game read the controller
 void lat_game_present(uint64_t slot);                      // ... and presented the frame shown at slot (pacer, ns)

@@ -12,6 +12,9 @@
 #define UP_FRAMES 8
 #define DOWN_MARGIN 0.85   // lat4: race frames of 25-40 ms moved it 2 <-> 3 every few seconds with 0.92 over 1 s
 #define DOWN_SECONDS 2
+#define HOLD_MIN_S 5
+#define HOLD_MAX_S 60
+#define PINGPONG_S 10
 #define UP_MARGIN 1.08   // gp15b: 50-54 ms spikes at interval 3 moved it to 4 one or two times every 5 s
 
 static double median(const FpsAuto *a, unsigned count) {
@@ -37,22 +40,45 @@ void fps_auto_reset(FpsAuto *a) {
     a->iv = 1;
 }
 
-int fps_auto_step(FpsAuto *a, double measured_ms) {
+static double median_real(const FpsAuto *a) {   // the last UP_FRAMES real periods
+    double v[UP_FRAMES];
+    for (unsigned i = 0; i < UP_FRAMES; i++) v[i] = a->real[i];
+    for (unsigned i = 1; i < UP_FRAMES; i++)
+        for (unsigned j = i; j > 0 && v[j - 1] > v[j]; j--) {
+            double t = v[j];
+            v[j] = v[j - 1], v[j - 1] = t;
+        }
+    return v[UP_FRAMES / 2];
+}
+
+// measured_ms: the game's own measure of the frame; real_ms: the time since the last frame began (0 unknown). Up on
+// the larger of the two: the game's measure can stay under the real period (lat5: 3 -> 1 on 8.7 ms frames before the
+// start, then the race at 0.79x at interval 1). Down one step at a time; after an up, no down for hold_s seconds,
+// doubled (to 60) when the up undid a down of the last 10 s.
+int fps_auto_step(FpsAuto *a, double measured_ms, double real_ms) {
     a->hist[a->head] = measured_ms;
     a->head = (a->head + 1) % FPS_AUTO_HIST;
+    a->real[a->n_real++ % UP_FRAMES] = real_ms;
     if (a->n < FPS_AUTO_HIST) a->n++;
     a->since++;
+    if (a->hold) a->hold--;
+    if (!a->hold_s) a->hold_s = HOLD_MIN_S;
     if (a->since >= UP_FRAMES && a->n >= UP_FRAMES) {
-        int up = fitting(median(a, UP_FRAMES), UP_MARGIN);
+        double m = median(a, UP_FRAMES), r = a->n_real >= UP_FRAMES ? median_real(a) : 0;
+        int up = fitting(m > r ? m : r, UP_MARGIN);
         if (up > a->iv) {
-            a->iv = up, a->since = 0;
+            int undid_down = a->downed && a->since < (unsigned)(PINGPONG_S * 60 / a->iv);
+            a->hold_s = undid_down ? (a->hold_s * 2 > HOLD_MAX_S ? HOLD_MAX_S : a->hold_s * 2) : HOLD_MIN_S;
+            a->iv = up, a->since = 0, a->downed = 0;
+            a->hold = (unsigned)(a->hold_s * 60 / a->iv);
             return a->iv;
         }
     }
-    unsigned second = DOWN_SECONDS * 60 / (unsigned)a->iv;   // two seconds of frames at this interval
-    if (a->iv > 1 && a->since >= second && a->n >= second) {
-        int down = fitting(median(a, second), DOWN_MARGIN);
-        if (down < a->iv) a->iv = down, a->since = 0;
+    unsigned window = DOWN_SECONDS * 60 / (unsigned)a->iv;   // two seconds of frames at this interval
+    if (a->iv > 1 && !a->hold && a->since >= window && a->n >= window) {
+        // one step at a time: the game's measure can be far under the frame's real cost (lat6: 9 ms at interval 4,
+        // 66 ms frames), so a step down is a trial the real period confirms or undoes within 8 frames
+        if (fitting(median(a, window), DOWN_MARGIN) < a->iv) a->iv--, a->since = 0, a->downed = 1;
     }
     return a->iv;
 }
