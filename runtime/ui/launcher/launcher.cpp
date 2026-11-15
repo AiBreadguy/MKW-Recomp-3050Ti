@@ -618,7 +618,7 @@ static void page_main(float w, float h) {
             // a code mod changed: the game code is built again first (generate and compile), on the files page
             L.play_after_setup = 1;
             L.page = PAGE_FILES;
-            setup_start(L.exe_dir, cfg_game_dir(), nullptr, 0);
+            setup_start(L.exe_dir, cfg_game_dir(), nullptr, -1);   // the RomFS mode is not part of this: the record's
         } else {
             mods_merge_sync(L.exe_dir);   // a stale .merged must not boot: usually a no-op fresh-check
             char player[PLAT_PATH_MAX * 2];
@@ -1658,7 +1658,9 @@ extern "C" int launcher_run(void) {
     if ((updated || other) && L.tools && plat_file_exists(state)) {
         if (other) rt_log("launcher: the game files were set up by another version: setting up again what changed");
         L.page = PAGE_FILES;   // set up again what the new version changed, from the last setup's copy
-        setup_start(L.exe_dir, cfg_game_dir(), nullptr, 0);
+        // no source and no mode: prepare.py takes both from the record, so the player's RomFS choice survives an
+        // update (asking for "copy" here would copy the whole RomFS over a linked one)
+        setup_start(L.exe_dir, cfg_game_dir(), nullptr, -1);
     } else if (!L.shot_at || getenv("MKW_UPDATE_AS")) {
         update_check_start(L.exe_dir);
     }
