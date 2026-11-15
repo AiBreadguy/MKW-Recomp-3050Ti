@@ -19,7 +19,7 @@ msgstr "Scherm"
 #. The settings tab with the game's and the menu's language, LAN play and the update check.
 msgctxt "UI_MENU_TAB_GENERAL"
 msgid "General"
-msgstr ""
+msgstr "Algemeen"
 
 msgctxt "UI_MENU_TAB_SOUND"
 msgid "Sound"
@@ -510,22 +510,22 @@ msgstr "Verscherping na FSR-schaling; 0 zet het uit."
 #. Under Sharpness, greyed out, when the upscaler is not AMD FSR 1.
 msgctxt "UI_MENU_SHARPNESS_FSR_ONLY"
 msgid "With AMD FSR 1 only"
-msgstr ""
+msgstr "Alleen met AMD FSR 1"
 
 #. Group heading on the Graphics tab: internal resolution and upscaling.
 msgctxt "UI_MENU_GROUP_RESOLUTION"
 msgid "Resolution"
-msgstr ""
+msgstr "Resolutie"
 
 #. Group heading on the Graphics tab: frame rate, frame generation, overlay.
 msgctxt "UI_MENU_GROUP_PERFORMANCE"
 msgid "Performance"
-msgstr ""
+msgstr "Prestaties"
 
 #. Graphics tab button: Auto-set.
 msgctxt "UI_MENU_AUTOSET"
 msgid "Best settings for this PC"
-msgstr ""
+msgstr "De beste instellingen voor deze pc"
 
 #. Description of Best settings for this PC.
 msgctxt "UI_MENU_AUTOSET_DESC"
@@ -533,16 +533,18 @@ msgid ""
 "Picks the Quality preset, the internal resolution and AMD FSR 1 from your graphics card and "
 "screen. A first guess: change anything afterwards."
 msgstr ""
+"Kiest de kwaliteitsvoorinstelling, de interne resolutie en AMD FSR 1 op basis van je videokaart "
+"en scherm. Een eerste schatting: verander daarna wat je wilt."
 
 #. Puts back what Best settings for this PC changed.
 msgctxt "UI_MENU_AUTOSET_UNDO"
 msgid "Undo best settings"
-msgstr ""
+msgstr "Beste instellingen ongedaan maken"
 
 #. Description of Undo best settings.
 msgctxt "UI_MENU_AUTOSET_UNDO_DESC"
 msgid "Puts back the rows Best settings for this PC changed."
-msgstr ""
+msgstr "Zet de rijen terug die „De beste instellingen voor deze pc” heeft gewijzigd."
 
 msgctxt "UI_MENU_GAME_LANG"
 msgid "Game language"
@@ -2219,292 +2221,293 @@ msgstr "Bijgewerkt naar %s: wat veranderd is wordt opnieuw ingesteld"
 #. printf format: keep every %... conversion, in the same order.
 msgctxt "UI_LAUNCH_UPDATE_TITLE"
 msgid "Update available: %s"
-msgstr ""
+msgstr "Update beschikbaar: %s"
 
 #. Under it: %s the version in use, %d the download in MB.
 #. printf format: keep every %... conversion, in the same order.
 msgctxt "UI_LAUNCH_UPDATE_DETAIL"
 msgid "You have %s · %d MB to download"
-msgstr ""
+msgstr "Je hebt %s · %d MB om te downloaden"
 
 #. The update card's button: downloads and installs it.
 msgctxt "UI_LAUNCH_UPDATE_NOW"
 msgid "Update"
-msgstr ""
+msgstr "Bijwerken"
 
 #. Opens the release's notes on GitHub.
 msgctxt "UI_LAUNCH_WHATS_NEW"
 msgid "What's new"
-msgstr ""
+msgstr "Wat is er nieuw"
 
 #. After a failed download.
 msgctxt "UI_LAUNCH_RETRY"
 msgid "Try again"
-msgstr ""
+msgstr "Opnieuw proberen"
 
 #. The game files' state with the game version the setup installed.
 #. printf format: keep every %... conversion, in the same order.
 msgctxt "UI_LAUNCH_FILES_READY_AS"
 msgid "Game files ready (version %s)"
-msgstr ""
+msgstr "Spelbestanden klaar (versie %s)"
 
 #. Under Play: %s is the first controller's name.
 #. printf format: keep every %... conversion, in the same order.
 msgctxt "UI_LAUNCH_PAD"
 msgid "Controller: %s"
-msgstr ""
+msgstr "Controller: %s"
 
 #. Under Play when no controller is connected.
 msgctxt "UI_LAUNCH_PAD_NONE"
 msgid "No controller connected"
-msgstr ""
+msgstr "Geen controller aangesloten"
 
 #. On the controller row: opens the Controls tab.
 msgctxt "UI_LAUNCH_CONFIGURE"
 msgid "Configure"
-msgstr ""
+msgstr "Installeren"
 
 #. Offered once on the start screen after the setup.
 msgctxt "UI_LAUNCH_SHORTCUT_ASK"
 msgid "Start the game from your desktop"
-msgstr ""
+msgstr "Speel vanaf je bureaublad"
 
 #. Makes the desktop shortcut.
 msgctxt "UI_LAUNCH_SHORTCUT_MAKE"
 msgid "Create shortcut"
-msgstr ""
+msgstr "Snelkoppeling maken"
 
 #. Puts the offer away; the button stays on the Game files page.
 msgctxt "UI_LAUNCH_NOT_NOW"
 msgid "Not now"
-msgstr ""
+msgstr "Nu niet"
 
 #. The keys, at the lower right of the start screen.
 msgctxt "UI_LAUNCH_KEYS"
 msgid "Enter or A: select · F11: fullscreen"
-msgstr ""
+msgstr "Enter of A: selecteren · F11: volledig scherm"
 
 #. Beside the Settings title on the start screen.
 msgctxt "UI_LAUNCH_SETTINGS_NOTE"
 msgid "Changes are saved and apply when you press Play"
-msgstr ""
+msgstr "Wijzigingen worden opgeslagen en gelden zodra je op Spelen drukt"
 
 #. Step 1 of the setup before the player picks their copy.
 msgctxt "UI_LAUNCH_NO_SOURCE"
 msgid "No copy chosen yet"
-msgstr ""
+msgstr "Je hebt nog geen kopie gekozen"
 
 #. Under Copy into the game folder.
 msgctxt "UI_LAUNCH_ROMFS_COPY_NOTE"
 msgid "Uses 23 GB more disk space; your copy can be deleted afterwards"
-msgstr ""
+msgstr "Gebruikt 23 GB extra schijfruimte; daarna kun je je kopie verwijderen"
 
 #. Under Use it where it is.
 msgctxt "UI_LAUNCH_ROMFS_LINK_NOTE"
 msgid "No extra disk space; your copy has to stay where it is"
-msgstr ""
+msgstr "Geen extra schijfruimte; je kopie moet blijven waar die staat"
 
 #. Under Set up: %s is the game folder.
 #. printf format: keep every %... conversion, in the same order.
 msgctxt "UI_LAUNCH_INSTALLS_TO"
 msgid "Installs to %s"
-msgstr ""
+msgstr "Wordt geïnstalleerd in %s"
 
 #. What a setup installed: label.
 msgctxt "UI_LAUNCH_INFO_VERSION"
 msgid "Game version"
-msgstr ""
+msgstr "Spelversie"
 
 #. What a setup installed: label; the value is MKW Recomp and its version.
 msgctxt "UI_LAUNCH_INFO_PORT"
 msgid "Set up by"
-msgstr ""
+msgstr "Geïnstalleerd door"
 
 #. What a setup installed: label; the value says how it is kept.
 msgctxt "UI_LAUNCH_INFO_ROMFS"
 msgid "RomFS"
-msgstr ""
+msgstr "RomFS"
 
 #. How the RomFS is kept, after the setup.
 msgctxt "UI_LAUNCH_ROMFS_COPIED"
 msgid "Copied into the game folder"
-msgstr ""
+msgstr "Gekopieerd naar de spelmap"
 
 #. How the RomFS is kept, after the setup.
 msgctxt "UI_LAUNCH_ROMFS_LINKED"
 msgid "Used where it is"
-msgstr ""
+msgstr "Gebruikt waar het staat"
 
 #. Shows the game folder in the file manager.
 msgctxt "UI_LAUNCH_OPEN_FOLDER"
 msgid "Open folder"
-msgstr ""
+msgstr "Map openen"
 
 #. Under Set up again, folded on the Game files page once the game is set up.
 msgctxt "UI_LAUNCH_SETUP_AGAIN_HINT"
 msgid "After a game update, or when the game files look damaged. The steps already done are kept."
 msgstr ""
+"Na een spelupdate, of als de spelbestanden beschadigd lijken. Gemaakte stappen blijven behouden."
 
 #. The start screen's page with the saves, the shortcuts, the updates and reporting a problem.
 msgctxt "UI_LAUNCH_TOOLS"
 msgid "Tools"
-msgstr ""
+msgstr "Hulpmiddelen"
 
 #. Tools page heading.
 msgctxt "UI_TOOLS_SAVES"
 msgid "Saves"
-msgstr ""
+msgstr "Spelstanden"
 
 #. Tools page row.
 msgctxt "UI_TOOLS_BACKUP"
 msgid "Back up saves"
-msgstr ""
+msgstr "Spelstanden back-uppen"
 
 #. Under Back up saves: %s is the player's name.
 #. printf format: keep every %... conversion, in the same order.
 msgctxt "UI_TOOLS_BACKUP_NOTE"
 msgid "A zip of %s's saves in the game folder's backups"
-msgstr ""
+msgstr "Een zip van de spelstanden van %s in de backups-map van het spel"
 
 #. After a backup: %s is the zip file.
 #. printf format: keep every %... conversion, in the same order.
 msgctxt "UI_TOOLS_BACKUP_DONE"
 msgid "Saved: %s"
-msgstr ""
+msgstr "Opgeslagen: %s"
 
 #. Button of Back up saves.
 msgctxt "UI_TOOLS_BACKUP_BUTTON"
 msgid "Back up"
-msgstr ""
+msgstr "Back-up maken"
 
 #. Tools page row with the two folders' buttons.
 msgctxt "UI_TOOLS_SAVES_FOLDERS"
 msgid "Saves and backups"
-msgstr ""
+msgstr "Spelstanden en back-ups"
 
 #. Shows the player's saves folder.
 msgctxt "UI_TOOLS_OPEN_SAVES"
 msgid "Open saves"
-msgstr ""
+msgstr "Spelstanden openen"
 
 #. Shows the backups folder.
 msgctxt "UI_TOOLS_OPEN_BACKUPS"
 msgid "Open backups"
-msgstr ""
+msgstr "Back-ups openen"
 
 #. Tools page heading.
 msgctxt "UI_TOOLS_SHORTCUTS"
 msgid "Shortcuts"
-msgstr ""
+msgstr "Snelkoppelingen"
 
 #. Tools page row.
 msgctxt "UI_TOOLS_STEAM"
 msgid "Add to Steam"
-msgstr ""
+msgstr "Toevoegen aan Steam"
 
 #. Under Add to Steam.
 msgctxt "UI_TOOLS_STEAM_NOTE"
 msgid "As a non-Steam game, for Big Picture and the Steam Deck"
-msgstr ""
+msgstr "Als spel dat niet van Steam is, voor Big Picture en Steam Deck"
 
 #. Button of Add to Steam.
 msgctxt "UI_TOOLS_ADD"
 msgid "Add"
-msgstr ""
+msgstr "Toevoegen"
 
 #. After Add to Steam.
 msgctxt "UI_TOOLS_STEAM_DONE"
 msgid "Added to Steam"
-msgstr ""
+msgstr "Toegevoegd aan Steam"
 
 #. After Add to Steam while Steam runs.
 msgctxt "UI_TOOLS_STEAM_RESTART"
 msgid "Added: restart Steam to see it"
-msgstr ""
+msgstr "Toegevoegd: start Steam opnieuw om het te zien"
 
 #. Why Add to Steam failed.
 msgctxt "UI_TOOLS_STEAM_NONE"
 msgid "Steam is not installed for this user"
-msgstr ""
+msgstr "Steam is voor deze gebruiker niet geïnstalleerd"
 
 #. Tools page heading.
 msgctxt "UI_TOOLS_UPDATES"
 msgid "Updates"
-msgstr ""
+msgstr "Updates"
 
 #. The version in use: %s.
 #. printf format: keep every %... conversion, in the same order.
 msgctxt "UI_TOOLS_VERSION"
 msgid "Version %s"
-msgstr ""
+msgstr "Versie %s"
 
 #. Looks for a new version.
 msgctxt "UI_TOOLS_CHECK"
 msgid "Check now"
-msgstr ""
+msgstr "Nu controleren"
 
 #. While the check runs.
 msgctxt "UI_TOOLS_CHECKING"
 msgid "Checking for a new version..."
-msgstr ""
+msgstr "Op zoek naar een nieuwe versie..."
 
 #. Tools page row: %s is the version before the last update.
 #. printf format: keep every %... conversion, in the same order.
 msgctxt "UI_TOOLS_UNDO_ROW"
 msgid "Go back to %s"
-msgstr ""
+msgstr "Terug naar %s"
 
 #. Under Go back to.
 msgctxt "UI_TOOLS_UNDO_NOTE"
 msgid "The version before the last update; the launcher starts again"
-msgstr ""
+msgstr "De versie van vóór de laatste update; de launcher opent opnieuw"
 
 #. Button that puts back the version before the last update.
 msgctxt "UI_TOOLS_UNDO"
 msgid "Undo update"
-msgstr ""
+msgstr "Update ongedaan maken"
 
 #. Confirmation: %s is that version.
 #. printf format: keep every %... conversion, in the same order.
 msgctxt "UI_TOOLS_UNDO_ASK"
 msgid "Go back to %s? The launcher starts again and sets up again what differs."
-msgstr ""
+msgstr "Terug naar %s? De launcher opent opnieuw en stelt wat veranderd is opnieuw in."
 
 #. Tools page heading.
 msgctxt "UI_TOOLS_PROBLEMS"
 msgid "Problems"
-msgstr ""
+msgstr "Problemen"
 
 #. Tools page row.
 msgctxt "UI_TOOLS_REPORT"
 msgid "Report a problem"
-msgstr ""
+msgstr "Probleem melden"
 
 #. Under Report a problem.
 msgctxt "UI_TOOLS_REPORT_NOTE"
 msgid "Copies your system's details and opens the bug report form, to paste them in"
-msgstr ""
+msgstr "Kopieert je systeemgegevens en opent het meldformulier om ze in te plakken"
 
 #. Button of Report a problem.
 msgctxt "UI_TOOLS_REPORT_BUTTON"
 msgid "Report"
-msgstr ""
+msgstr "Melden"
 
 #. After Report.
 msgctxt "UI_TOOLS_REPORT_COPIED"
 msgid "Your system's details are on the clipboard: paste them in the form"
-msgstr ""
+msgstr "Je systeemgegevens staan in het klembord: plak ze in het formulier"
 
 #. Tools page row with the log folder's button.
 msgctxt "UI_TOOLS_LOGS"
 msgid "Logs"
-msgstr ""
+msgstr "Logboeken"
 
 #. A Tools page action that did not work: %s says why.
 #. printf format: keep every %... conversion, in the same order.
 msgctxt "UI_TOOLS_FAILED"
 msgid "Failed: %s"
-msgstr ""
+msgstr "Mislukt: %s"
 
 msgctxt "UI_LAUNCH_NO_GAME_DATA"
 msgid "Your own copy of the game · No game data included"
