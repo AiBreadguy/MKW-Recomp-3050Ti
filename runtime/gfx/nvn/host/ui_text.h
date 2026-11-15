@@ -212,6 +212,10 @@ typedef enum {
     UI_LAUNCH_FILES_READY_AS, UI_LAUNCH_PAD, UI_LAUNCH_PAD_NONE, UI_LAUNCH_CONFIGURE, UI_LAUNCH_SHORTCUT_ASK,
     UI_LAUNCH_SHORTCUT_MAKE, UI_LAUNCH_NOT_NOW, UI_LAUNCH_KEYS,
     UI_LAUNCH_SETTINGS_NOTE,   // beside the Settings title: changes save at once and apply when the game starts
+    // the Game files page: the setup's steps (INSTALLS_TO: "... %s", the game folder) and what a setup installed
+    UI_LAUNCH_NO_SOURCE, UI_LAUNCH_ROMFS_COPY_NOTE, UI_LAUNCH_ROMFS_LINK_NOTE, UI_LAUNCH_INSTALLS_TO,
+    UI_LAUNCH_INFO_VERSION, UI_LAUNCH_INFO_PORT, UI_LAUNCH_INFO_ROMFS, UI_LAUNCH_ROMFS_COPIED, UI_LAUNCH_ROMFS_LINKED,
+    UI_LAUNCH_OPEN_FOLDER, UI_LAUNCH_SETUP_AGAIN_HINT,
     UI_LAUNCH_NO_GAME_DATA,   // the start screen's lower right: the player brings the game, the port ships none
     // the last run's end (ui/launcher/launcher_lastrun.cpp): KNOWN "... #%d ..." (issue), FIXED "... %s ..." (tag),
     // OPEN "... #%d" (issue): the buttons open the issue or the bug form

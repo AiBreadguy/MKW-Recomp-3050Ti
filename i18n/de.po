@@ -2266,6 +2266,62 @@ msgctxt "UI_LAUNCH_SETTINGS_NOTE"
 msgid "Changes are saved and apply when you press Play"
 msgstr ""
 
+#. Step 1 of the setup before the player picks their copy.
+msgctxt "UI_LAUNCH_NO_SOURCE"
+msgid "No copy chosen yet"
+msgstr ""
+
+#. Under Copy into the game folder.
+msgctxt "UI_LAUNCH_ROMFS_COPY_NOTE"
+msgid "Uses 23 GB more disk space; your copy can be deleted afterwards"
+msgstr ""
+
+#. Under Use it where it is.
+msgctxt "UI_LAUNCH_ROMFS_LINK_NOTE"
+msgid "No extra disk space; your copy has to stay where it is"
+msgstr ""
+
+#. Under Set up: %s is the game folder.
+#. printf format: keep every %... conversion, in the same order.
+msgctxt "UI_LAUNCH_INSTALLS_TO"
+msgid "Installs to %s"
+msgstr ""
+
+#. What a setup installed: label.
+msgctxt "UI_LAUNCH_INFO_VERSION"
+msgid "Game version"
+msgstr ""
+
+#. What a setup installed: label; the value is MKW Recomp and its version.
+msgctxt "UI_LAUNCH_INFO_PORT"
+msgid "Set up by"
+msgstr ""
+
+#. What a setup installed: label; the value says how it is kept.
+msgctxt "UI_LAUNCH_INFO_ROMFS"
+msgid "RomFS"
+msgstr ""
+
+#. How the RomFS is kept, after the setup.
+msgctxt "UI_LAUNCH_ROMFS_COPIED"
+msgid "Copied into the game folder"
+msgstr ""
+
+#. How the RomFS is kept, after the setup.
+msgctxt "UI_LAUNCH_ROMFS_LINKED"
+msgid "Used where it is"
+msgstr ""
+
+#. Shows the game folder in the file manager.
+msgctxt "UI_LAUNCH_OPEN_FOLDER"
+msgid "Open folder"
+msgstr ""
+
+#. Under Set up again, folded on the Game files page once the game is set up.
+msgctxt "UI_LAUNCH_SETUP_AGAIN_HINT"
+msgid "After a game update, or when the game files look damaged. The steps already done are kept."
+msgstr ""
+
 msgctxt "UI_LAUNCH_NO_GAME_DATA"
 msgid "Your own copy of the game · No game data included"
 msgstr "Deine eigene Kopie des Spiels · Keine Spieldaten enthalten"
