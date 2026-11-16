@@ -124,11 +124,13 @@ site zstd main f0c34 97ffc593 94dc00ef   # same
 # ZSTD_decompressContinue (main+0xdf000, reads the DCtx's +0x7068); its only call is from main+0xdec20.
 site zstd main dec5c 94000011 94dc48e1   # bl main+0xdeca0 -> host_stream (patch page + 0xfe0)
 
-# The game's output size: 2560 | 1440 << 32 built in x10 in main+0xb879f0 (the only mov #0xa00 / movk #0x5a0, lsl #32
-# pair of main), as in 1.0.0's GraphicsSystem constructor. x10 is not read between the two.
+# The game's output size: GraphicsSystem's constructor (main+0xdce7d0, the function naming "GraphicsSystem", as 1.0.0's
+# main+0xcf3514) builds it in x10 and stores it at [sp, #0x24], the same slot as 1.0.0; 1.8.0 fixes 3840 | 2160 << 32
+# there (the 3D still renders at the RomFS's 1440 lines). main+0xb879f0's 2560x1440 pair is a table of display modes
+# (720, 1080, 1440, 2160 lines), not the output: patching it left the targets at 2560x1440 (pr450-180, wth180b).
 set output MKW_OUTPUT_PATCH 0
-site output main b87b9c d281400a @page:x10 f947e94a   # mov x10, #0xa00 -> adrp x10, page; ldr x10, [x10, #0xfd0]
-site output main b87ba8 f2c0b40a d503201f            # movk x10, #0x5a0, lsl #32 -> nop
+site output main dce850 d281e00a @page:x10 f947e94a   # mov x10, #0xf00 -> adrp x10, page; ldr x10, [x10, #0xfd0]
+site output main dce854 f2c10e0a d503201f            # movk x10, #0x870, lsl #32 -> nop
 
 # No camera (new in 1.8.0, GameChat's USB camera): main+0xcdebc0 opens the camera service (nn::camera::sdk::
 # CreateCameraContext, then CMIF requests on the handle it returns) and aborts when that fails; this runtime has no

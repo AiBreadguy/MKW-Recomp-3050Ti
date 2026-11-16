@@ -40,6 +40,7 @@ static const RtVersion versions[] = {
     {
         .number = 100,
         .display = "1.0.0",
+        .output_lines = 1440,
         .nvn_ret = 0xcf3a60,
         .frame_update = 0x3a9e28,
         .frame_slot = 0x329fd50,
@@ -69,6 +70,7 @@ static const RtVersion versions[] = {
     {
         .number = 180,
         .display = "1.8.0",
+        .output_lines = 2160,
         .nvn_ret = 0xdd07cc,
         .frame_update = 0x69cbb0,
         .frame_slot = 0x367aac0,

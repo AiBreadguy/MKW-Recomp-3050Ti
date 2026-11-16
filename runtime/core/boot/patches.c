@@ -387,9 +387,10 @@ static void aspect_set(const RtGame *g) {
 }
 
 // The output set: with MKW_RESOLUTION not original, that resolution's lines at 16:9 (720: 1280x720) in place of the
-// 2560x1440 the game fixes in code; with original, the lines the picture gets in the window when fewer than 1440
+// output the game fixes in code (1.0.0 2560x1440, 1.8.0 3840x2160: RtVersion.output_lines); with original, the lines
+// the picture gets in the window when fewer than that
 // (Adrià 08/11/2026: the present shrank 2560x1440 to a 1080-line window with its 2x2 bilinear blit, jagged edges,
-// nit-off; a smaller output goes through FSR instead). MKW_OUTPUT_PATCH=0 keeps 2560x1440 at any resolution. With
+// nit-off; a smaller output goes through FSR instead). MKW_OUTPUT_PATCH=0 keeps the game's at any resolution. With
 // MKW_ASPECT set, the width is the lines times that aspect (1440 lines when nothing else sets them).
 static void aspect_tall_target(uint32_t wh[2], int lines, float aspect, int native_w, int native_h) {
     // Keep horizontal resolution; add render rows rather than shrinking the image's width.
@@ -400,7 +401,7 @@ static void aspect_tall_target(uint32_t wh[2], int lines, float aspect, int nati
 
 static void output_size(const RtGame *g) {
     const char *res = cfg_value("MKW_RESOLUTION"), *off = cfg_get("MKW_OUTPUT_PATCH");
-    int lines = strcmp(res, "original") ? atoi(res) : 0;
+    int lines = strcmp(res, "original") ? atoi(res) : 0, native = rt_version()->output_lines;
     if (!lines) {
         // the lines the picture gets in the window: fewer than the window's when it is narrower than the picture and
         // the present letterboxes it (gfx_fit_rect, MKW_PICTURE_FIT=keep). A 16:9 picture on the Steam Deck's
@@ -409,7 +410,7 @@ static void output_size(const RtGame *g) {
         if (gfx_window_shape(&w, &h)) {
             float a = aspect_out ? aspect_out : 16.0f / 9;
             if (w > 0 && strcmp(cfg_value("MKW_PICTURE_FIT"), "stretch") && w < h * a) h = (int)(w / a + 0.5f);
-            if (h >= 360 && h < 1440) lines = h;
+            if (h >= 360 && h < native) lines = h;
         }
     }
     if (!lines && aspect_out) lines = 1440;
@@ -428,8 +429,8 @@ static void output_size(const RtGame *g) {
         }
         memcpy((void *)(uintptr_t)(g->patch_page + OUTPUT_SIZE), wh, sizeof wh);
         g->patch_on[i] = 1;
-        rt_log("patches: game output %ux%u instead of 2560x1440 (MKW_RESOLUTION %s, MKW_ASPECT %s, window lines %d)",
-               wh[0], wh[1], res, cfg_value("MKW_ASPECT"), gfx_window_lines());
+        rt_log("patches: game output %ux%u instead of %dx%d (MKW_RESOLUTION %s, MKW_ASPECT %s, window lines %d)",
+               wh[0], wh[1], native * 16 / 9, native, res, cfg_value("MKW_ASPECT"), gfx_window_lines());
         return;
     }
 }

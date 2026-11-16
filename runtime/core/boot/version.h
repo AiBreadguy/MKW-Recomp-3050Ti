@@ -19,6 +19,7 @@ typedef struct { const char *name; uint64_t name_slot; int role; } RtRaceEvent;
 typedef struct {
     int number;                // RtGame.version: 100, 180
     const char *display;       // as the game shows it (nn::oe::GetDisplayVersion): "1.0.0"
+    int output_lines;          // the output height GraphicsSystem fixes in code at 16:9 (set output): 1440, 2160
     // main offsets
     uint64_t nvn_ret;          // return address of the first nvnBootstrapLoader call (boot.c checkpoint)
     uint64_t frame_update;     // the frame object's per-frame virtual (game.c, MKW_FPS)
