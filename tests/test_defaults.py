@@ -36,7 +36,7 @@ MAIN = r"""
 int main(int argc, char **argv) {
     if (argc > 5) {
         printf("%u\n", vk_budgeted_tex_pool_blocks(atoi(argv[1]), strtoull(argv[2], 0, 10),
-                     strtoull(argv[5], 0, 10)));
+                     strtoull(argv[5], 0, 10), argc > 6 ? strtoull(argv[6], 0, 10) : 0));
         return 0;
     }
     printf("%llu %llu %u\n", (unsigned long long)vk_default_sparse_mib(atoi(argv[1]), strtoull(argv[2], 0, 10)),
@@ -111,10 +111,13 @@ def test_optional_budgeted_pool_for_4gb_cards(defaults: Path) -> None:
     # Run a second, C-backed harness via the same compiled program: cap the usual
     # 256-MiB texture-pool blocks to half the exact current driver budget.
     # A 4-GB mobile GPU can have less than 4 GB budget available to Vulkan.
-    for physical, budget, expected in [
-        (4035, 0, 8), (4035, 4035, 7), (4035, 3500, 6), (4035, 2700, 5),
-        (4035, 511, 0), (16304, 12000, 8),
+    for physical, budget, used, expected in [
+        (4035, 0, 0, 8), (4035, 4035, 0, 7), (4035, 4035, 400, 7),
+        (4035, 4035, 1400, 5), (4035, 3500, 900, 5),
+        (4035, 4000, 4200, 0), (4035, 511, 0, 0),
+        (16304, 12000, 1100, 8),
     ]:
-        p = subprocess.run([str(defaults), "1", str(physical), "16000", "0", str(budget)],
+        p = subprocess.run([str(defaults), "1", str(physical), "16000", "0",
+                            str(budget), str(used)],
                            capture_output=True, text=True, check=True)
         assert int(p.stdout.strip()) == expected

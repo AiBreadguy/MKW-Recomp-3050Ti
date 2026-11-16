@@ -21,3 +21,6 @@ quotes and backslashes in POSIX installation paths instead of treating them as s
 | `gamecode.py` | `prepare.py`'s compile step: the generated C into `mkwgame.so`/`mkwgame.dll` with the package's zig (or clang), a link probe beside the compiles and the link with its 30 min limit | imported by `prepare.py` |
 | `gamecopy.py` | `prepare.py`'s copy of a loose `exefs/` or `romfs/` into the game folder: `COPY_JOBS` files at a time, resumable (a file already there with its size is kept, each written through `.part`); after any copy, loose, `.nup` or `.nx`, the files that version does not have are removed (#261), never in a linked folder or one holding the source | imported by `prepare.py` |
 | `machine.py` | What `prepare.py`'s steps run with: the package's tools (`setup/` next to the executable) or the system's, the tool processes tied to the setup's (process group, Windows job object), and the memory that sizes the parallel jobs | Imported by `prepare.py` |
+
+
+**3050 Ti fork:** The packaged updater checks `AiBreadguy/MKW-Recomp-3050Ti` by default, not the original upstream repository. Set `MKW_UPDATE_REPO=adriadam10/mkw-recomp` explicitly to opt back into upstream releases. Do not auto-replace a custom build with an upstream release during performance comparisons.

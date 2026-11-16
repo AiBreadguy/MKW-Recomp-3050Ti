@@ -54,3 +54,13 @@ First: stable 30 FPS at normal game speed without reduced visual quality relativ
 - `MKW_TEX_POOL_BUDGETED=1`: shrink the pool's **preallocation** on 4-GB cards when the driver's exact VRAM budget is smaller than the physical heap. Leaves the default unchanged, leaves explicit `MKW_VK_TEX_POOL_MIN` unchanged. Could reduce paging; could also make texture allocation stutter worse. Requires a controlled A/B test.
 
 Use the same race scene, identical settings, and `MKW_VRAM_LOG=300`. Compare real game frame time, p95 stutters, speed and memory usage. Revert the experiment if it harms correctness.
+
+
+### Headroom-sensitive follow-up
+
+In the `perf/3050ti-pool-headroom` branch, the optional texture-pool experiment considers **already allocated dedicated VRAM** as well as the driver budget. It preallocates at most half of the *remaining* reported budget. This is an opt-in hypothesis: it may avoid spill/stutters when other applications use VRAM, but fewer preallocated blocks may also make first-load stutter worse. Test it separately against `dev/3050ti-baseline`; do not claim an FPS gain from the calculation alone.
+
+
+### Fork-specific updater safety
+
+The packaged launcher now checks `AiBreadguy/MKW-Recomp-3050Ti` for releases by default, instead of offering official upstream releases over this experimental build. There are no fork releases yet; a 404 during an update check is silently treated as no offer. Users can explicitly opt into the upstream update channel with `MKW_UPDATE_REPO=adriadam10/mkw-recomp`. The main source's existing upstream URL is still credited in the README.

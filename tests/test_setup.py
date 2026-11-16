@@ -445,3 +445,17 @@ def test_chunk_key_ignores_generated_headers_it_does_not_include(tmp_path: Path)
     layout.write_text("#define A 2\n")
     after = keys()
     assert after[0] == before[0] and after[1] != before[1]
+
+
+def test_fork_update_channel_isolated_from_upstream() -> None:
+    # The portable package must not silently offer the original upstream release
+    # as an update over a custom 3050 Ti build. Execute an isolated Python import.
+    code = ("import sys; sys.path.insert(0, " + repr(str(ROOT / "tools/prepare")) +
+            "); import update; print(update.REPO)")
+    env = os.environ.copy()
+    env.pop("MKW_UPDATE_REPO", None)
+    p = subprocess.run([sys.executable, "-c", code], env=env, capture_output=True, text=True, check=True)
+    assert p.stdout.strip() == "AiBreadguy/MKW-Recomp-3050Ti"
+    env["MKW_UPDATE_REPO"] = "adriadam10/mkw-recomp"
+    p = subprocess.run([sys.executable, "-c", code], env=env, capture_output=True, text=True, check=True)
+    assert p.stdout.strip() == "adriadam10/mkw-recomp"

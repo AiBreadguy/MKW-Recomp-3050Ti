@@ -374,10 +374,10 @@ void vk_tex_pool_start(void) {
         uint64_t used = 0, budget = 0;
         int exact = 0;
         if (vk_mem_vram(&used, &budget, &exact) && exact && budget) {
-            int cap = (int)vk_budgeted_tex_pool_blocks(1, vram >> 20, budget >> 20);
+            int cap = (int)vk_budgeted_tex_pool_blocks(1, vram >> 20, budget >> 20, used >> 20);
             if (cap < blocks) {
-                rt_log("vk: texture pool: budget-aware cap %d -> %d blocks (driver budget %.0f MiB; "
-                       "MKW_TEX_POOL_BUDGETED=1)", blocks, cap, budget / 1048576.0);
+                rt_log("vk: texture pool: budget-aware cap %d -> %d blocks (driver %.0f MiB used of %.0f MiB budget; "
+                       "MKW_TEX_POOL_BUDGETED=1)", blocks, cap, used / 1048576.0, budget / 1048576.0);
                 blocks = cap;
             }
         }
