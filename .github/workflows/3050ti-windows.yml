@@ -95,6 +95,9 @@ jobs:
               Write-Host "Game-free ABI probe passed."
           } elseif ($probeOutput -match "game code: the game files are not set up") {
               Write-Host "Native Windows executable launched correctly; missing game setup is expected in a game-free CI package."
+              # PowerShell propagates the last native command's exit code from the step
+              # even when our expected-error condition is handled; clear it explicitly.
+              $global:LASTEXITCODE = 0
           } else {
               throw "Unexpected Windows runtime failure (exit $LASTEXITCODE)"
           }
