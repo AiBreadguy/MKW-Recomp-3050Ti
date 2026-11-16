@@ -1,13 +1,13 @@
 # What: Windows benchmark launcher for AiBreadguy/MKW-Recomp-3050Ti.
 # Why: A/B runs on the same Windows laptop need identical mode flags and repeatable VRAM samples.
-# Usage: .\\3050ti-benchmark.ps1 -Exe "C:\\mkw-recomp\\mkw.exe" -Mode baseline
-#        .\\3050ti-benchmark.ps1 -Exe "C:\\mkw-recomp\\mkw.exe" -Mode drawcache
-#        .\\3050ti-benchmark.ps1 -Exe "C:\\mkw-recomp\\mkw.exe" -Mode vram
+# Usage: .\3050ti-benchmark.ps1 -Exe "C:\mkw-recomp\mkw.exe" -Mode baseline
+#        .\3050ti-benchmark.ps1 -Exe "C:\mkw-recomp\mkw.exe" -Mode drawcache
+#        .\3050ti-benchmark.ps1 -Exe "C:\mkw-recomp\mkw.exe" -Mode vram
 # Tested by code inspection; run on your own Windows laptop for actual measurements.
 param(
     [ValidateSet("baseline", "drawcache", "vram", "both")]
     [string] $Mode = "baseline",
-    [string] $Exe = ".\\mkw.exe",
+    [string] $Exe = ".\mkw.exe",
     [ValidateRange(1, 60)]
     [int] $IntervalSeconds = 2
 )
@@ -34,15 +34,16 @@ try {
     }
 
     $smi = Get-Command nvidia-smi.exe -ErrorAction SilentlyContinue
-    if (-not $smi) {
-        $fallback = "C:\\Program Files\\NVIDIA Corporation\\NVSMI\\nvidia-smi.exe"
-        if (Test-Path -LiteralPath $fallback) { $smi = Get-Item $fallback }
+    $smiPath = if ($smiPath) { $smi.Source } else { $null }
+    if (-not $smiPath) {
+        $fallback = "C:\Program Files\NVIDIA Corporation\NVSMI\nvidia-smi.exe"
+        if (Test-Path -LiteralPath $fallback) { $smiPath = $fallback }
     }
     $meta = @{
         mode = $Mode
         executable = $Exe
         started = (Get-Date).ToString("o")
-        gpu_monitor = [bool]$smi
+        gpu_monitor = [bool]$smiPath
         note = "This records GPU memory and utilization, NOT true game FPS; use the in-game performance overlay and game log for FPS, latency and speed."
     }
     $meta | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $dir "run.json") -Encoding UTF8
@@ -58,7 +59,7 @@ try {
         $gpuUsed = $null; $gpuTotal = $null; $gpuPct = $null
         if ($smi) {
             try {
-                $out = & $smi.Source "--query-gpu=memory.used,memory.total,utilization.gpu" "--format=csv,noheader,nounits" 2>$null
+                $out = & $smiPath "--query-gpu=memory.used,memory.total,utilization.gpu" "--format=csv,noheader,nounits" 2>$null
                 if ($LASTEXITCODE -eq 0 -and $out) {
                     $v = ($out | Select-Object -First 1) -split ","
                     if ($v.Length -ge 3) {

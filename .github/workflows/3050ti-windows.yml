@@ -6,6 +6,7 @@ on:
   push:
     branches:
       - dev/3050ti-baseline
+      - perf/3050ti-pool-headroom
   workflow_dispatch:
 
 permissions:
