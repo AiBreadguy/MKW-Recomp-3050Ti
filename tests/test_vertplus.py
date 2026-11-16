@@ -61,6 +61,7 @@ int main(int argc, char **argv) {
             "-Wall",
             "-Wextra",
             "-Werror",
+            "-D_CRT_SECURE_NO_WARNINGS",  # Windows CI: the UCRT deprecates sscanf and friends
             "-I" + str(ROOT / "runtime"),
             str(out / "test.c"),
             "-lm",
