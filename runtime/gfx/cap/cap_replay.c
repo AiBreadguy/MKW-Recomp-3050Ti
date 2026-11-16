@@ -50,8 +50,9 @@ static const tex_t *pin(const tex_t *t) {
 static void save_png(const GfxBackend *b, const tex_t *t, const char *path) {
     int fmt = t->d.format;
     int bgra = fmt == NVN_FORMAT_BGRA8 || fmt == NVN_FORMAT_BGRA8_SRGB;
-    if (!bgra && fmt != NVN_FORMAT_RGBA8 && fmt != NVN_FORMAT_RGBA8_SRGB) {
-        rt_log("cap: present of NVN format %#x not saved (8-bit RGBA and BGRA only)", fmt);
+    int rgb10 = fmt == NVN_FORMAT_RGB10A2;
+    if (!bgra && !rgb10 && fmt != NVN_FORMAT_RGBA8 && fmt != NVN_FORMAT_RGBA8_SRGB) {
+        rt_log("cap: present of NVN format %#x not saved (8-bit RGBA, BGRA and RGB10A2 only)", fmt);
         return;
     }
     uint32_t w = t->d.width, h = t->d.height;
@@ -62,7 +63,14 @@ static void save_png(const GfxBackend *b, const tex_t *t, const char *path) {
     NVNcopyRegion r = {.width = (int)w, .height = (int)h, .depth = 1};
     b->finish();
     b->read_texels(t, &view, &r, px, 4ull * w, 4ull * w * h);
-    if (bgra)
+    if (rgb10)
+        // Game 1.8.0 presents RGB10A2 (A2B10G10R10, R in the low bits); PNG is 8-bit, so each channel keeps its top 8.
+        for (uint64_t i = 0; i < 4ull * w * h; i += 4) {
+            uint32_t v;
+            memcpy(&v, px + i, 4);
+            px[i] = (v >> 2) & 0xff, px[i + 1] = (v >> 12) & 0xff, px[i + 2] = (v >> 22) & 0xff;
+        }
+    else if (bgra)
         for (uint64_t i = 0; i < 4ull * w * h; i += 4) {
             uint8_t x = px[i];
             px[i] = px[i + 2], px[i + 2] = x;
