@@ -225,6 +225,17 @@ int vk_exec_state_op(VkExec *ex, uint32_t op, const void *a);
 void vk_exec_chunk_begin(VkExec *ex, const VkImage *seen_depth, int nseen);
 void vk_exec_op_pos_set(uint64_t pos);   // a chunk's thread: the position before its first op
 void vk_exec_chunk_end(VkExec *ex);
+// The game's queues' replay states within one submission (OP_QUEUE, nvn_qorder.c): vk_exec_queue_swap saves ex as
+// the state of t->cur and loads that of queue id: 2; a queue first seen goes on from ex: 1; 0 when id is current.
+// The serial replay ends the pass and puts a full barrier first (vk_exec.c queue_switch); the chunks' walk swaps its own
+// table and cuts there, and a chunk's end is that barrier (vk_exec_par.c).
+#define VK_EXEC_QUEUES 4
+typedef struct {
+    struct { uint64_t id; VkExec st; } q[VK_EXEC_QUEUES];
+    int n;
+    uint64_t cur;
+} VkExecQueues;
+int vk_exec_queue_swap(VkExecQueues *t, VkExec *ex, uint64_t id);
 // vk_exec_par.c: called by vk_exec_record before it walks; 1 when it recorded and submitted the submission's ops as
 // chunks (ex then holds the state after the last op and a new command buffer for the rest); 0: walk as usual. diag: a
 // diagnosis that times ops or passes is on (chunks stay off). vk_exec_par_log: the perf line (MKW_TRACE=perf).

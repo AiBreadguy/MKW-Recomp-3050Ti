@@ -484,10 +484,7 @@ int vk_exec_state_op(VkExec *ex, uint32_t op, const void *a) {
 // the other had set). A queue first seen in the submission starts from the state the replay is at, as every
 // submission does. The switch ends the pass and puts a full barrier between the two queues' work: the wait it stands
 // for orders the other queue's writes before what follows.
-#define QS_MAX 4
-static struct { uint64_t id; VkExec st; } qs[QS_MAX];
-static int nqs;
-static uint64_t qs_cur;
+static VkExecQueues QS;
 
 // MKW_QORDER_LOG=N (diagnosis): the first N queue switches, each with what the queue before it ran since its turn
 // began (draws, dispatches, ops), to tell which stages the queues pass each other.
@@ -497,30 +494,27 @@ static void queue_switch_log(uint64_t id) {
     if (left < 0) left = cfg_get("MKW_QORDER_LOG") ? atoi(cfg_get("MKW_QORDER_LOG")) : 0;
     if (!left) return;
     left--;
-    if (!qs_cur) o0 = 0;   // (op positions count from the submission's start)
+    if (!QS.cur) o0 = 0;   // (op positions count from the submission's start)
     rt_log("vk: queue %#llx after %#llx: %llu draws, %llu dispatches, %llu ops in its turn (fence %llu)",
-           (unsigned long long)id, (unsigned long long)qs_cur,
+           (unsigned long long)id, (unsigned long long)QS.cur,
            (unsigned long long)(vk_exec_frame.draws_seen - d0), (unsigned long long)(vk_exec_frame.dispatches - c0),
            (unsigned long long)(x_pos - o0), (unsigned long long)vk_exec_recording_fence());
     d0 = vk_exec_frame.draws_seen, c0 = vk_exec_frame.dispatches, o0 = x_pos;
 }
 
-static void queue_switch(VkExec *ex, uint64_t id) {
-    if (id == qs_cur) return;
-    queue_switch_log(id);
-    vk_exec_pass_end(ex);
-    vk_exec_barrier(ex);
+int vk_exec_queue_swap(VkExecQueues *t, VkExec *ex, uint64_t id) {
+    if (id == t->cur) return 0;
     int from = -1, to = -1;
-    for (int i = 0; i < nqs; i++) {
-        if (qs[i].id == qs_cur) from = i;
-        if (qs[i].id == id) to = i;
+    for (int i = 0; i < t->n; i++) {
+        if (t->q[i].id == t->cur) from = i;
+        if (t->q[i].id == id) to = i;
     }
-    if (qs_cur && from < 0 && nqs < QS_MAX) from = nqs++, qs[from].id = qs_cur;
-    if (from >= 0) qs[from].st = *ex;
-    qs_cur = id;
-    if (to < 0) return;
+    if (t->cur && from < 0 && t->n < VK_EXEC_QUEUES) from = t->n++, t->q[from].id = t->cur;
+    if (from >= 0) t->q[from].st = *ex;
+    t->cur = id;
+    if (to < 0) return 1;   // a queue first seen goes on from ex
     VkExec keep = *ex;
-    *ex = qs[to].st;
+    *ex = t->q[to].st;
     // What belongs to the command buffer being recorded, not to the queue: kept.
     ex->cb = keep.cb, ex->fence = keep.fence, ex->recorded = keep.recorded, ex->in_pass = 0;
     ex->views = keep.views, ex->nviews = keep.nviews, ex->cap_views = keep.cap_views;
@@ -530,6 +524,15 @@ static void queue_switch(VkExec *ex, uint64_t id) {
     ex->nfbl = keep.nfbl, ex->fbl_mask = keep.fbl_mask, ex->fb_dirty = keep.fb_dirty, ex->fb_fs = NULL;
     ex->tex_serial = keep.tex_serial + 1, ex->pass_serial = keep.pass_serial + 1;
     ex->dirty = VK_EXEC_DIRTY_ALL, ex->rt_resolved = 0;
+    return 2;
+}
+
+static void queue_switch(VkExec *ex, uint64_t id) {
+    if (id == QS.cur) return;
+    queue_switch_log(id);
+    vk_exec_pass_end(ex);
+    vk_exec_barrier(ex);
+    if (vk_exec_queue_swap(&QS, ex, id) < 2) return;
     dc_drop("a queue switch");
     vk_exec_draw_new_cb();
 }
@@ -703,7 +706,7 @@ int vk_exec_record(VkCommandBuffer cb, const uint64_t *handles, int n, uint64_t 
     part_t0 = kern_now_ns();
     x_cur = x_here_ex = ex;
     x_pos = 0;
-    nqs = 0, qs_cur = 0;   // queue states live within one submission (queue_switch)
+    QS.n = 0, QS.cur = 0;   // queue states live within one submission (queue_switch)
     uint64_t b0 = op_timing > 0 ? plat_cycles() : 0;
     if (n && rec_diff_on > 0) rec_diff_begin();
     if (n) ru_submission(ex);
