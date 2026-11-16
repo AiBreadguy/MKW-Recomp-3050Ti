@@ -485,6 +485,16 @@ void vk_texture_compute_written(int id);          // a compute dispatch wrote sl
 // (a sparse NVN texture may be a whole image: depth formats in RADV).
 enum { VK_TEXCAP_GPU = 1, VK_TEXCAP_RECENT = 2, VK_TEXCAP_SPARSE = 4 };
 int vk_texture_capture_state(const tex_t *t, uint32_t recent);
+// runtime/gfx/cap: the image of an ASTC texture decoded into another format (RGBA8, BC7, BC1: TexVkFormat.astc_bw), as
+// the image's own bytes, since ReadTexels has no ASTC blocks to give for it. vk_texture_decoded: 1 and its format,
+// levels, layers (a 3D image: 1) and the bytes of one layer of each level when t has such an image (none is made).
+// vk_texture_decoded_copy: nlayers layers of one level read into buf, waiting for the GPU, or written from it (the
+// replay; the image is made when missing); 0 when the image here differs in format or size (a capture made with
+// another ASTC setting or GPU) and nothing was copied.
+typedef struct { VkFormat format; uint32_t levels, layers; uint64_t bytes[16]; } VkTexDecoded;
+int vk_texture_decoded(const tex_t *t, VkTexDecoded *out);
+int vk_texture_decoded_copy(const tex_t *t, VkFormat format, uint32_t level, uint32_t layer, uint32_t nlayers,
+                            uint8_t *buf, uint64_t bytes, int write);
 // vk_mem_cap.c (runtime/gfx/cap): every backed chunk of the physical pools out to emit, with its GPU address; and one
 // chunk written back at its address (0 when no physical pool chunk starts there). Both wait for the GPU.
 uint64_t vk_mem_phys_dump(void (*emit)(uint64_t addr, const void *p, uint64_t n, void *ctx), void *ctx);
