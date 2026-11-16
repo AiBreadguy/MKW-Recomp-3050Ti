@@ -28,6 +28,7 @@
 #define SEED_HOST 0xfb0     // patch page offset of host_seed_tick (set seed)
                             // 0xfa0: game.c host_frame_update (MKW_FPS)
 #define SHADOW_POOL_HOST 0xf90   // patch page offset of host_shadow_pool (set shadow)
+#define CAMERA_FOV_HOST 0xf30    // race camera FOV before its caches and projection/frustum updates
 #define ASPECT_HOST 0xf80        // patch page offset of host_aspect (set aspect)
 #define UI_PROJ_HOST 0xf70       // patch page offset of host_ui_proj (set aspect)
 #define UI_ROWS_HOST 0xf60       // patch page offset of host_ui_rows (set aspect)
@@ -175,8 +176,8 @@ static void shadow_set(const RtGame *g) {
 }
 
 // The aspect set: MKW_ASPECT (Screen tab) wider than 16:9 shows more at the sides (Hor+): 21:9, 32:9, 48:9 or the window's
-// own. Each camera's aspect is widened by the output's over 16:9 (host_aspect), and the output gets that width
-// (output_size); the 2D layouts keep their shape in the middle 16:9 (host_ui_proj). The race's HUD follows (uw-32x9b).
+// own. Window also extends vertically below 16:9 on 1.0.0, whose FOV cache layout is verified. Each camera's aspect
+// follows the output (host_aspect/output_size); the 2D layouts fit without stretching (host_ui_proj).
 static float aspect_out;     // the output's width / height; 0: 16:9, the set off
 static float aspect_scale;   // aspect_out / (16 / 9)
 
@@ -186,7 +187,11 @@ static float aspect_of(void) {
     if (!strcmp(a, "window")) gfx_window_shape(&w, &h);
     else sscanf(a, "%d:%d", &w, &h);
     float r = w > 0 && h > 0 ? (float)w / (float)h : 0;
-    return r > 16.0f / 9 + 0.01f ? r : 0;   // narrower than 16:9 is not offered: the console's
+    if (!strcmp(a, "window") && r > 0 && r < 16.0f / 9) {
+        if (rt_version()->number == 100) return r;
+        rt_log("patches: tall Window needs the 1.0.0 FOV layout; keeping 16:9 on %s", rt_version()->display);
+    }
+    return r > 16.0f / 9 + 0.01f ? r : 0;
 }
 
 // A 16:9 view, or an 8:9 one doubled (half of a two-player split), within the mod's 0.008, is widened; other views
@@ -205,16 +210,44 @@ static float aspect_widen(float w, float h) {
     while (k < n && (seen[k][0] != w || seen[k][1] != h)) k++;
     if (k == n && n < 16 && __atomic_compare_exchange_n(&nseen, &n, n + 1, 0, __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE)) {
         seen[n][0] = w, seen[n][1] = h;
-        rt_log("patches: camera view %.0fx%.0f (%.3f): %s", w, h, a, on ? "widened" : "kept");
+        rt_log("patches: camera view %.0fx%.0f (%.3f): %s", w, h, a, on ? "fitted" : "kept");
     }
     return on ? aspect_scale : 1;
 }
 
-// In place of fdiv s0, s0, s1 (recomp/patches-mkw.txt): the camera's aspect, widened.
+// The requested angle remains the source for all projection and frustum users. At 1.0.0 main+45fba4,
+// the race update has already stored aspect (460c10), but is about to replace the FOV and all three caches.
+// Change the fresh request before those writes, not the caches that the game immediately overwrites.
+static float aspect_fov_angle(float angle, float scale) {
+    return 2.0f * atanf(tanf(angle * 0.5f) / scale);
+}
+
+static void host_camera_fov(Cpu *c) {
+    float angle, half;
+    memcpy(&angle, &c->v[0], sizeof angle);
+    memcpy(&half, &c->v[13], sizeof half);
+    float a = *(float *)(uintptr_t)(c->x[24] + 0xb0);
+    if (rt_version()->number == 100 && aspect_scale > 0 && aspect_scale < 1 &&
+        fabsf(a - (16.0f / 9) * aspect_scale) < 0.008f) {
+        angle = aspect_fov_angle(angle, aspect_scale);
+        c->v[0] = 0;
+        memcpy(&c->v[0], &angle, sizeof angle);
+    }
+    // Emulate the replaced fmul s8, s0, s13, including scalar upper-lane clearing.
+    half *= angle;
+    c->v[8] = 0;
+    memcpy(&c->v[8], &half, sizeof half);
+}
+
+// In place of fdiv s0, s0, s1 (recomp/patches-mkw.txt): the camera's aspect, fitted.
 static void host_aspect(Cpu *c) {
     float w, h;
     memcpy(&w, &c->v[0], sizeof w), memcpy(&h, &c->v[1], sizeof h);
-    float a = w / h * aspect_widen(w, h);
+    float scale = aspect_widen(w, h);
+    // Keep the first projection's 16:9 layout calibration. The second projection receives
+    // the race camera's fresh corrected request at 45fba4. UI draw projections fit the 16:9 canvas separately.
+    if (scale < 1 && c->x[30] == rt_main_addr(0x460d44)) scale = 1;
+    float a = w / h * scale;
     c->v[0] = 0;
     memcpy(&c->v[0], &a, sizeof a);
 }
@@ -222,7 +255,7 @@ static void host_aspect(Cpu *c) {
 // In place of the bl to nn::ui2d::DrawInfo's projection getter (main+0x1682c9c: the 4x4 at [x0+0x10] to [x1]) from the
 // two draw constant-buffer setups of the 2D layouts: the same copy, and a 16:9 projection gets its x row narrowed by
 // 16:9 over the output's aspect, so the 2D keeps its shape in the middle 16:9 of a wider picture: the idea of oot-mod's
-// 2D canvas hook (MIT; also NX2navi's wide_hud). MKW's layouts are drawn in perspective (uw6-menu: rows 1.358 0 0 0 /
+// 2D canvas hook (craftycorvid/oot-mod c5ccd1c, MIT; docs/research.md). MKW's layouts are drawn in perspective (uw6-menu: rows 1.358 0 0 0 /
 // 0 2.414 0 0 / 0 0 -1.0002 1301.94 / 0 0 -1 1303.68, 45 degrees at 16:9), not through the orthographic cameras of
 // main+0x460c10 (uw5-menu: none of those calls). Row-major, x row first: x and y unskewed, its aspect m[5] / m[0].
 static int is_16x9(const float *m) {
@@ -248,6 +281,30 @@ static int ui_full_screen(const Cpu *c, float *tx) {
     return w > 1920 * 0.98f && h > 1080 * 0.98f;
 }
 
+// Fit a complete 16:9 layout without losing either axis. Narrow windows spend the extra height, not width.
+static void aspect_ui_fit(float *m, float scale) {
+    if (scale < 1) m[5] *= scale, m[7] *= scale;
+    else m[0] /= scale, m[3] /= scale;
+}
+
+// CharaSelect_00 and MachineSelect_00 use 100-unit screen-capture masks at the list's
+// left/right edges (1.0.0 pane traces: height 1080 / 954.8). Their texture contains the
+// already fitted screen, including the footer. Fitting that capture again creates
+// rectangular seams. MenuCupSelect_00 also has a 1080-square left backdrop: it must
+// cover the added height, not expose its top/bottom rectangle. Pane names and sizes
+// come from those layouts, confirmed in live draws. Keep controls and wide modes unchanged.
+static int ui_tall_backdrop(const Cpu *c) {
+    if (!(aspect_scale > 0 && aspect_scale < 1)) return 0;
+    uint64_t mtx = c->x[23];
+    if (mtx < 0x70 || (mtx & 3) || c->x[22] != mtx - 0x20 ||
+        !plat_mem_readable(mtx - 0x70, 0xe0)) return 0;
+    const float *sz = (const float *)(uintptr_t)c->x[22];
+    const char *name = (const char *)(uintptr_t)(mtx + 0x40);
+    if (fabsf(sz[0] - 1080) < 0.01f && fabsf(sz[1] - 1080) < 0.01f && !memcmp(name, "P_BG_00", 8)) return 1;
+    return fabsf(sz[0] - 100) < 0.01f && sz[1] >= 900 && sz[1] <= 1080 &&
+        (!memcmp(name, "P_Cap_00", 9) || !memcmp(name, "P_Cap_01", 9));
+}
+
 static void host_ui_proj(Cpu *c) {
     float *s = (float *)(uintptr_t)(c->x[0] + 0x10);
     float *m = (float *)(uintptr_t)c->x[1];
@@ -256,18 +313,21 @@ static void host_ui_proj(Cpu *c) {
     // Narrowed in DrawInfo too, so its other readers see it: the labels drawn through a texture (the main menu's, the
     // cup select's) had their place stretched with their shape right (uw8-menu). Narrowed, it no longer passes
     // is_16x9: a second call leaves it.
-    if (on) m[0] /= aspect_scale, m[3] /= aspect_scale, memcpy(s, m, 16 * sizeof *m);
+    if (on) aspect_ui_fit(m, aspect_scale), memcpy(s, m, 16 * sizeof *m);
     // A pane over the whole canvas (fades, blurred backdrops, the cup map: uw11-menu showed the race loading at the
     // sides of a fade) is drawn wide again, to the edges of the picture; a movie's stays 16:9 (bars at the present)
     float tx;
     int full = aspect_out ? ui_full_screen(c, &tx) : -1;
-    if (full == 1 && !ov_movie_playing()) m[0] *= aspect_scale, m[3] *= aspect_scale;
+    if ((full == 1 || ui_tall_backdrop(c)) && !ov_movie_playing()) {
+        if (aspect_scale < 1) m[5] /= aspect_scale, m[7] /= aspect_scale;
+        else m[0] *= aspect_scale, m[3] *= aspect_scale;
+    }
     // A split screen (uw14-split): each player's HUD is on its half of the canvas (its quarter with three or four,
     // left or right all the same), now in the middle of the picture; moved to the middle of its half of the picture,
     // with its shape. In NDC, x' = x + d with d = +-0.5 *
     // (1 - 1 / aspect_scale), added as d times the w row
     uint64_t at = split_at;
-    int moved = full == 0 && at && frame_step_ticks() + 1 - at < 30 && (tx > 1 || tx < -1);
+    int moved = aspect_scale > 1 && full == 0 && at && frame_step_ticks() + 1 - at < 30 && (tx > 1 || tx < -1);
     if (moved) {
         float d = (tx > 0 ? 0.5f : -0.5f) * (1 - 1 / aspect_scale);
         for (int i = 0; i < 4; i++) m[i] += d * m[12 + i];
@@ -285,7 +345,7 @@ static void host_ui_rows(Cpu *c) {
     float m[16];
     memcpy(m, (const void *)(uintptr_t)(c->x[20] + 0x10), sizeof m);
     int on = is_16x9(m);
-    if (on) m[0] /= aspect_scale, m[3] /= aspect_scale;
+    if (on) aspect_ui_fit(m, aspect_scale);
     memcpy(&c->v[2], m, 16), memcpy(&c->v[3], m + 4, 16);
 }
 
@@ -294,7 +354,7 @@ static void host_ui_rows(Cpu *c) {
 static void host_ui_rows2(Cpu *c) {
     float m[16];
     memcpy(m, (const void *)(uintptr_t)(c->x[21] + 0x10), sizeof m);
-    if (is_16x9(m)) m[0] /= aspect_scale, m[3] /= aspect_scale;
+    if (is_16x9(m)) aspect_ui_fit(m, aspect_scale);
     memcpy(&c->v[0], m, 16), memcpy(&c->v[4], m + 4, 16);
 }
 
@@ -308,13 +368,20 @@ static void aspect_set(const RtGame *g) {
     // Without the set (a game version whose sites are not found yet) the picture stays 16:9: a wider output alone
     // would stretch the game's 16:9 cameras.
     aspect_out = has_set(g, "aspect") ? aspect_of() : 0;
+    if (aspect_out > 0 && aspect_out < 16.0f / 9 && !has_set(g, "vertplus")) {
+        rt_log("patches: tall Window needs regenerated game code with the vertplus FOV set; keeping 16:9");
+        aspect_out = 0;
+    }
     if (!aspect_out && strcmp(cfg_value("MKW_ASPECT"), "16:9") && !has_set(g, "aspect"))
         rt_log("patches: MKW_ASPECT %s has no effect on game version %s (no aspect set)", cfg_value("MKW_ASPECT"),
                rt_version()->display);
     aspect_scale = aspect_out / (16.0f / 9);
     gfx_aspect_set(aspect_out);
-    for (int i = 0; i < g->npatch_sets; i++)
+    for (int i = 0; i < g->npatch_sets; i++) {
         if (!strcmp(g->patch_sets[i].name, "aspect")) g->patch_on[i] = aspect_out != 0;
+        if (!strcmp(g->patch_sets[i].name, "vertplus"))
+            g->patch_on[i] = aspect_out > 0 && aspect_scale < 1;
+    }
     if (aspect_out) rt_log("patches: camera aspect %.3f, x%.3f over 16:9 (MKW_ASPECT %s)", aspect_out, aspect_scale,
                            cfg_value("MKW_ASPECT"));
 }
@@ -323,7 +390,14 @@ static void aspect_set(const RtGame *g) {
 // 2560x1440 the game fixes in code; with original, the lines the picture gets in the window when fewer than 1440
 // (Adrià 08/11/2026: the present shrank 2560x1440 to a 1080-line window with its 2x2 bilinear blit, jagged edges,
 // nit-off; a smaller output goes through FSR instead). MKW_OUTPUT_PATCH=0 keeps 2560x1440 at any resolution. With
-// MKW_ASPECT wider than 16:9, the width is the lines times that aspect (1440 lines when nothing else sets them).
+// MKW_ASPECT set, the width is the lines times that aspect (1440 lines when nothing else sets them).
+static void aspect_tall_target(uint32_t wh[2], int lines, float aspect, int native_w, int native_h) {
+    // Keep horizontal resolution; add render rows rather than shrinking the image's width.
+    wh[0] = (uint32_t)(lines * 16 / 9);
+    wh[1] = ((uint32_t)(wh[0] / aspect + 0.5f) + 1) & ~1u;
+    if (native_w > 0 && native_h > 0) wh[0] = (uint32_t)native_w, wh[1] = (uint32_t)native_h;
+}
+
 static void output_size(const RtGame *g) {
     const char *res = cfg_value("MKW_RESOLUTION"), *off = cfg_get("MKW_OUTPUT_PATCH");
     int lines = strcmp(res, "original") ? atoi(res) : 0;
@@ -347,6 +421,11 @@ static void output_size(const RtGame *g) {
         }
         uint32_t wide = aspect_out ? ((uint32_t)(lines * aspect_out + 0.5f) + 1) & ~1u : 0;
         uint32_t wh[2] = {wide ? wide : (uint32_t)(lines * 16 / 9), (uint32_t)lines};
+        if (aspect_out > 0 && aspect_scale < 1) {
+            int w = 0, h = 0;
+            if (!strcmp(res, "original")) gfx_window_shape(&w, &h);
+            aspect_tall_target(wh, lines, aspect_out, w, h);
+        }
         memcpy((void *)(uintptr_t)(g->patch_page + OUTPUT_SIZE), wh, sizeof wh);
         g->patch_on[i] = 1;
         rt_log("patches: game output %ux%u instead of 2560x1440 (MKW_RESOLUTION %s, MKW_ASPECT %s, window lines %d)",
@@ -413,6 +492,7 @@ void rt_patch_hosts(void) {
     if (g->npatch_sets) rt_register_host(g->patch_page + SHADOW_POOL_HOST, host_shadow_pool);
     if (g->npatch_sets) rt_register_host(g->patch_page + SEED_HOST, host_seed_tick);
     if (g->npatch_sets) rt_register_host(g->patch_page + ASPECT_HOST, host_aspect);
+    if (g->npatch_sets) rt_register_host(g->patch_page + CAMERA_FOV_HOST, host_camera_fov);
     if (g->npatch_sets) rt_register_host(g->patch_page + UI_PROJ_HOST, host_ui_proj);
     if (g->npatch_sets) rt_register_host(g->patch_page + UI_ROWS_HOST, host_ui_rows);
     if (g->npatch_sets) rt_register_host(g->patch_page + UI_ROWS2_HOST, host_ui_rows2);
