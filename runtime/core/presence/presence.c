@@ -20,6 +20,7 @@
 #include <string.h>
 
 #include "cfg.h"
+#include "course_names.h"
 #include "host.h"
 #include "platform/platform.h"
 #include "menu.h"
@@ -39,7 +40,7 @@ static const char DEFAULT_APP[] = "1571829149213925496";   // the project's Disc
 static _Atomic unsigned changes;   // bumped by every hook that changed something
 static _Atomic int connected;      // READY arrived on the current connection (presence_connected)
 static PlatMutex course_lock = PLAT_MUTEX_INIT;
-static char course[64];            // the course of the race, its file name's words ("Airship Fortress"); "" none
+static char course[64];            // the course of the race as its file names say it ("MooMooFarm"); "" none
 
 // ---- what the player does, from the files the game opens
 //
@@ -55,8 +56,8 @@ static char course[64];            // the course of the race, its file name's wo
 //   AI/RaceTimeAttackResult...ainb, Sound/.../BGM_Seq_RaceIntro..._TA.bwav   a Time Trial race's load
 //   StaffGhost/<Course>.ghost.zs       a staff ghost raced or watched: Time Trial
 //   Env/BalloonBattle_<Course>..., Env/CoinBattle_<Course>...   a battle (all of them also open once at start)
-// The course is the file's own name made into words ("MooMooFarm" -> "Moo Moo Farm"): the player's game files,
-// nothing of the game in this code; the game's translated name would need its message files.
+// The course is the game's own English name for the file's internal one ("MooMooFarm" -> "Moo Moo Meadows"), from the
+// player's game texts (course_names.c), else the internal name's words ("Moo Moo Farm"): nothing of the game in this code.
 
 enum { MODE_NONE, MODE_GRAND_PRIX, MODE_KNOCKOUT, MODE_TIME_TRIAL, MODE_BATTLE };
 
@@ -75,22 +76,17 @@ static void store(_Atomic int *a, int v) {
         atomic_fetch_add_explicit(&changes, 1, memory_order_relaxed);
 }
 
-// The course from the part of a file name up to the next '_': "MooMooFarm_A_00" -> "Moo Moo Farm",
-// "DKJungleParkway_A" -> "DK Jungle Parkway"; NULL clears it.
+// The course from the part of a file name up to the next '_': "MooMooFarm_A_00" -> "MooMooFarm"; NULL clears it.
+// The presence thread turns it into the game's name (course_names.c).
 static void set_course(const char *stem) {
-    char words[sizeof course];
+    char raw[sizeof course];
     size_t o = 0;
-    for (size_t i = 0; stem && stem[i] && stem[i] != '_' && stem[i] != '[' && stem[i] != '.' && o + 2 < sizeof words; i++) {
-        char ch = stem[i];
-        int upper = ch >= 'A' && ch <= 'Z', next_lower = stem[i + 1] >= 'a' && stem[i + 1] <= 'z';
-        int prev_lower = i && stem[i - 1] >= 'a' && stem[i - 1] <= 'z';
-        if (o && upper && (prev_lower || next_lower)) words[o++] = ' ';
-        words[o++] = ch;
-    }
-    words[o] = 0;
+    for (size_t i = 0; stem && stem[i] && stem[i] != '_' && stem[i] != '[' && stem[i] != '.' && o + 1 < sizeof raw; i++)
+        raw[o++] = stem[i];
+    raw[o] = 0;
     if (!plat_mutex_trylock(&course_lock)) return;   // another opener holds it: the next file will do
-    int changed = strcmp(course, words) != 0;
-    if (changed) memcpy(course, words, o + 1);
+    int changed = strcmp(course, raw) != 0;
+    if (changed) memcpy(course, raw, o + 1);
     plat_mutex_unlock(&course_lock);
     if (changed) atomic_fetch_add_explicit(&changes, 1, memory_order_relaxed);
 }
@@ -267,6 +263,19 @@ static void json_str(char *out, size_t cap, const char *s) {
     out[o] = 0;
 }
 
+// A course the game's texts do not name, as its internal name's words: "DKJungleParkway" -> "DK Jungle Parkway".
+static void words(const char *raw, char *out, size_t cap) {
+    size_t o = 0;
+    for (size_t i = 0; raw[i] && o + 2 < cap; i++) {
+        char ch = raw[i];
+        int upper = ch >= 'A' && ch <= 'Z', next_lower = raw[i + 1] >= 'a' && raw[i + 1] <= 'z';
+        int prev_lower = i && raw[i - 1] >= 'a' && raw[i - 1] <= 'z';
+        if (o && upper && (prev_lower || next_lower)) out[o++] = ' ';
+        out[o++] = ch;
+    }
+    out[o] = 0;
+}
+
 // What the profile says: details (the phase) and state (the course, or the port's settings). In English whatever the
 // menu language, as the course names are (the user, 15/11/2026).
 static void describe(char *details, size_t dcap, char *state, size_t scap) {
@@ -276,9 +285,11 @@ static void describe(char *details, size_t dcap, char *state, size_t scap) {
     *state = 0;
     if (menu_is_open()) snprintf(state, scap, "In the port's settings");
     else if (r == 2) {
+        char raw[sizeof course];
         plat_mutex_lock(&course_lock);
-        snprintf(state, scap, "%s", course);
+        memcpy(raw, course, sizeof raw);
         plat_mutex_unlock(&course_lock);
+        if (*raw && !course_name(raw, m == MODE_BATTLE, state, scap)) words(raw, state, scap);
     }
 }
 
