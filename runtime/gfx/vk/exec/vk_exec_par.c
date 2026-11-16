@@ -1,4 +1,5 @@
-// MKW_REPLAY_PAR (default 0; "ab": in the B blocks): one submission's replay recorded on several threads. The game
+// MKW_REPLAY_PAR (default 1 with 6 or more physical cores, 0 below; "ab": in the B blocks): one submission's replay
+// recorded on several threads. The game
 // sends a race frame as one NVN command buffer of 2,500-3,100 draws, and one thread records it in 16-23 ms
 //. Here a light walk follows the replay state through the submission's ops
 // without recording (0.5 ms a race frame, walk1) and cuts them into chunks of MKW_REPLAY_PAR_DRAWS draws and
@@ -598,7 +599,13 @@ static void worker_main(void *arg) {
 }
 
 static void setup(void) {
-    P.mode = rt_knob("REPLAY_PAR", "0");
+    // On by default with 6+ physical cores: with the serial head it is neutral where the GPU sets the frame, with 1
+    // player (hd3a/hd3b: +0.28 ms) and 2 (hd4a/hd4b: +0.50 ms, the recording 34 -> 30 ms), i5-8400 with 6 cores and
+    // a GTX 1050 Ti; it gains where the recording sets it. Off below: on a Steam Deck's 4 cores (8 threads, hence not
+    // plat_cpu_count) the chunk threads took the game's CPU, 2 players 25.4 -> 22 fps (#449, before the head). 0 when
+    // the core count is unknown.
+    uint64_t all, first;
+    P.mode = rt_knob("REPLAY_PAR", plat_cpu_cores(&all, &first) >= 6 ? "1" : "0");
     const char *e = cfg_get("MKW_REPLAY_WALK");
     P.walk_diag = e && atoi(e) > 0;
     e = cfg_get("MKW_REPLAY_PAR_DRAWS");
