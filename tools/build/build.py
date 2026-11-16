@@ -154,7 +154,9 @@ def game_id() -> str:
     another id is not loaded (runtime/core/boot/gamelib.c)."""
     h = hashlib.sha256(" ".join(GEN_FLAGS).encode())
     for p in sorted([*(RUNTIME / "cpu").glob("*.h"), RUNTIME / "core/boot/gamelib.h"]):
-        h.update(p.read_bytes())
+        # without CRs: Git for Windows checks out with CRLF (core.autocrlf=true), and a runtime built from such a clone
+        # refused the release's mkwgame.dll of the same headers as "built for another version" (16/11/2026)
+        h.update(p.read_bytes().replace(b"\r\n", b"\n"))
     return h.hexdigest()[:16]
 
 
