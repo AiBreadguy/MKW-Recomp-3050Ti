@@ -33,7 +33,8 @@
 
 enum { OP_HANDSHAKE, OP_FRAME, OP_CLOSE, OP_PING, OP_PONG };
 
-static const char DEFAULT_APP[] = "1571573235936526436";   // the port's Discord application: its name is the "Playing ..."
+static const char DEFAULT_APP[] = "1571829149213925496";   // the project's Discord application, "Mario Kart World", with the
+                                                            // port's icon (tools/build/icon.py) as the "icon" asset
 
 static _Atomic unsigned changes;   // bumped by every hook that changed something
 static _Atomic int connected;      // READY arrived on the current connection (presence_connected)
