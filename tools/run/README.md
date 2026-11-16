@@ -5,6 +5,7 @@ through `job.sh`.
 
 | Script | What it does | Usage |
 |---|---|---|
+| `3050ti-benchmark.ps1` | Windows-only fork benchmark launcher. Runs stock / drawcache / VRAM-budget flags one at a time and logs GPU samples (not FPS). | `pwsh -File tools/run/3050ti-benchmark.ps1 -Exe C:\\Games\\MKW\\mkw.exe -Mode baseline` (also `drawcache`, `vram`, `both`) |
 | `job.sh` | Runs a heavy command (a game run, a replay) through the host's job runner when there is one (`JOB_RUNNER`, or `job-runner` on PATH: memory cap and one at a time), else a systemd user unit capped at `JOB_MEM` without swap, else directly | `tools/run/job.sh run\|start NAME CMD...` |
 | `watch.sh` | Follows a run's log and prints FATAL and guard stops, plus the lines matching a pattern if given (each one wakes the agent: only what changes the plan); exits when the run ends (the command of a Monitor) | `tools/run/watch.sh NAME [PATTERN]` |
 | `live.sh` | A run that stays alive to be inspected through its control FIFO (`MKW_CTL`, `runtime/core/base/ctl.c`), with the race runs' settings | `tools/run/live.sh NAME [SECONDS]` |

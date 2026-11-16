@@ -40,9 +40,13 @@ uint32_t vk_default_tex_pool_blocks(int discrete, uint64_t vram_mib) {
 // Experimental: avoid reserving half of a 4-GB card when the actual driver budget is smaller.
 // Use complete 256-MiB blocks up to half the budget, but never exceed the old default.
 // The caller uses this only with MKW_TEX_POOL_BUDGETED=1 and a trustworthy driver budget.
-uint32_t vk_budgeted_tex_pool_blocks(int discrete, uint64_t vram_mib, uint64_t budget_mib) {
+uint32_t vk_budgeted_tex_pool_blocks(int discrete, uint64_t vram_mib, uint64_t budget_mib,
+                                      uint64_t already_used_mib) {
     uint32_t usual = vk_default_tex_pool_blocks(discrete, vram_mib);
-    if (!budget_mib) return usual;
-    uint64_t cap = budget_mib / 512;
+    if (!budget_mib || !usual) return usual;
+    // Only half the budget not already used: the VMA blocks counted in used must also fit.
+    // This avoids reserving a full 1.75 GiB pool after other users have consumed a large portion of VRAM.
+    uint64_t available = already_used_mib >= budget_mib ? 0 : budget_mib - already_used_mib;
+    uint64_t cap = available / 512;   // 256 MiB blocks, leaving at least half the remaining VRAM unreserved
     return cap < usual ? (uint32_t)cap : usual;
 }

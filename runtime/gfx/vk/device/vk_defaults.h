@@ -9,6 +9,6 @@ uint64_t vk_default_sparse_mib(int discrete, uint64_t vram_mib);        // MKW_S
 uint64_t vk_default_mem_limit_mib(uint64_t ram_mib, uint64_t carveout_mib);   // MKW_GPU_MEM_LIMIT unset, integrated
 uint32_t vk_default_tex_pool_blocks(int discrete, uint64_t vram_mib);  // MKW_VK_TEX_POOL_MIN unset
 uint32_t vk_budgeted_tex_pool_blocks(int discrete, uint64_t vram_mib,
-                                     uint64_t budget_mib);  // MKW_TEX_POOL_BUDGETED=1 experiment
+                                     uint64_t budget_mib, uint64_t already_used_mib);  // opt-in experiment
 
 #endif
