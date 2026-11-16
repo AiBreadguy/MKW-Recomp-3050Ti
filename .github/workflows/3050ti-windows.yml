@@ -57,3 +57,34 @@ jobs:
           path: build/release/*-windows-x64.zip
           if-no-files-found: error
           retention-days: 30
+
+  # Smoke-check the actual portable package on a Windows runner (no Nintendo game files).
+  # The GitHub-hosted runner may lack Vulkan: that prevents a native launch check but does
+  # not indicate the package is broken for a laptop with the NVIDIA Vulkan driver installed.
+  windows-smoke:
+    needs: windows-portable
+    runs-on: windows-latest
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: MKW-Recomp-3050Ti-Windows
+          path: windows-artifact
+      - name: Inspect portable ZIP and run game-free ABI probe if possible
+        shell: pwsh
+        run: |
+          $pkg = Get-ChildItem -Path windows-artifact -Filter "*-windows-x64.zip" -File | Select-Object -First 1
+          if (-not $pkg) { throw "No Windows portable package downloaded" }
+          Expand-Archive -LiteralPath $pkg.FullName -DestinationPath extracted
+          $exe = (Resolve-Path -LiteralPath "extracted/mkw-recomp/mkw.exe").Path
+          $updater = "extracted/mkw-recomp/setup/src/tools/prepare/update.py"
+          if (-not (Test-Path -LiteralPath "extracted/mkw-recomp/SDL3.dll")) { throw "SDL3.dll missing" }
+          if (-not (Test-Path -LiteralPath $updater)) { throw "Packaged updater missing" }
+          if (-not (Select-String -LiteralPath $updater -SimpleMatch "AiBreadguy/MKW-Recomp-3050Ti")) {
+              throw "Incorrect updater: would offer upstream builds"
+          }
+          if (-not (Test-Path -LiteralPath "$env:WINDIR/System32/vulkan-1.dll")) {
+              Write-Warning "Hosted runner lacks Vulkan loader; native ABI probe skipped. Windows package structure passed."
+              exit 0
+          }
+          & $exe --probe-gfx-abi
+          if ($LASTEXITCODE -ne 0) { throw "Windows runtime ABI probe failed with exit code $LASTEXITCODE" }

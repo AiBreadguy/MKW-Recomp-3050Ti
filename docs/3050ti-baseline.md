@@ -59,3 +59,8 @@ Use the same race scene, identical settings, and `MKW_VRAM_LOG=300`. Compare rea
 ### Headroom-sensitive follow-up
 
 In the `perf/3050ti-pool-headroom` branch, the optional texture-pool experiment considers **already allocated dedicated VRAM** as well as the driver budget. It preallocates at most half of the *remaining* reported budget. This is an opt-in hypothesis: it may avoid spill/stutters when other applications use VRAM, but fewer preallocated blocks may also make first-load stutter worse. Test it separately against `dev/3050ti-baseline`; do not claim an FPS gain from the calculation alone.
+
+
+### Fork-specific updater safety
+
+The packaged launcher now checks `AiBreadguy/MKW-Recomp-3050Ti` for releases by default, instead of offering official upstream releases over this experimental build. There are no fork releases yet; a 404 during an update check is silently treated as no offer. Users can explicitly opt into the upstream update channel with `MKW_UPDATE_REPO=adriadam10/mkw-recomp`. The main source's existing upstream URL is still credited in the README.
