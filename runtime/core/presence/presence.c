@@ -1,6 +1,6 @@
 // Discord Rich Presence: while the game runs, the player's Discord profile shows it (the name of the Discord
 // application, the time played, an icon) and what the player is doing, from the files the game opens (below).
-// MKW_DISCORD=0 (Settings > General) turns it off live; MKW_DISCORD_APP is the Discord application id, a test
+// MKW_DISCORD (Settings > General, off by default: the player's Discord friends see it) turns it on and off live; MKW_DISCORD_APP is the Discord application id, a test
 // application's for instance.
 //
 // Discord's desktop client listens on a local pipe (Windows \\.\pipe\discord-ipc-N, Linux the Unix socket
@@ -94,6 +94,18 @@ static void set_course(const char *stem) {
     if (changed) atomic_fetch_add_explicit(&changes, 1, memory_order_relaxed);
 }
 
+// The course a Grand Prix's road leads to: "InterStageEx1_ToadFactoryToChocoMountain_A_01" -> "ChocoMountain_A_01". The
+// "To" between two courses follows a lowercase letter or a digit and comes before a capital, so the one that starts
+// "ToadFactory" is not it (11 of 1.0.0's 202 roads start there); NULL when there is none.
+static const char *interstage_to(const char *name) {
+    const char *s = strchr(name, '_');
+    for (s = s ? s + 1 : name; *s && *s != '_'; s++)
+        if (s[0] == 'T' && s[1] == 'o' && s[2] >= 'A' && s[2] <= 'Z' && s > name &&
+            ((s[-1] >= 'a' && s[-1] <= 'z') || (s[-1] >= '0' && s[-1] <= '9')))
+            return s + 2;
+    return NULL;
+}
+
 void presence_file_opened(const char *path) {
     const char *dir = strstr(path, ":/");   // "content:/Env/..." -> "Env/..."
     dir = dir ? dir + 2 : path;
@@ -110,8 +122,8 @@ void presence_file_opened(const char *path) {
         set_course(name + 5);
         store(&racing, 2);
     } else if (starts_with(dir, "Env/InterStage")) {
-        const char *to = strstr(name, "To");
-        if (to) set_course(to + 2);
+        const char *to = interstage_to(name);
+        if (to) set_course(to);
         store(&racing, 2);
     } else if (started && (starts_with(dir, "Env/BalloonBattle_") || starts_with(dir, "Env/CoinBattle_"))) {
         set_course(strchr(name, '_') + 1);
@@ -138,6 +150,7 @@ const char *const presence_probe_steps[] = {
     "content:/Movie/KinokoOp.webm",
     "content:/Env/Race_DKJungleParkway_A_00[Game03].dlpl.zs",
     "content:/Env/InterStageEx1_WestCityToCentral_A_01[Game03].dlpl.zs",
+    "content:/Env/InterStageEx1_ToadFactoryToChocoMountain_A_01[Game03].dlpl.zs",
     NULL,
 };
 
