@@ -551,6 +551,13 @@ int vk_exec_bind_state(VkExec *ex, uint32_t op, const void *payload) {
         ex->tex_serial++;   // feedback_scan reads only textures: a rescan at most
         break;
     }
+    case OP_PUSH_CONST: {   // the recorder clamped offset and size to the bank (nvn_api_cmd.c push_const)
+        const p_push_const *b = payload;
+        if (b->stage >= 0 && b->stage < NVN_BIND_STAGES && b->offset >= 0 && b->size >= 0 &&
+            (uint32_t)b->offset + (uint32_t)b->size <= NVN_C24_BYTES)
+            memcpy(ex->c24[b->stage] + b->offset, b->data, (size_t)b->size);
+        break;
+    }
     default: return 0;
     }
     return 1;
@@ -569,7 +576,8 @@ void vk_exec_op_draw(VkExec *ex, uint32_t op, const void *payload) {
         return;
     }
     if (vk_exec_bind_state(ex, op, payload)) {
-        if (op == OP_BIND_PROGRAM || op == OP_BIND_UBO || op == OP_BIND_SSBO || op == OP_BIND_TEX || op == OP_BIND_IMG)
+        if (op == OP_BIND_PROGRAM || op == OP_BIND_UBO || op == OP_BIND_SSBO || op == OP_BIND_TEX || op == OP_BIND_IMG ||
+            op == OP_PUSH_CONST)
             bind_gen++;
         return;
     }
