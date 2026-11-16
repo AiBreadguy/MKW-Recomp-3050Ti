@@ -483,21 +483,25 @@ NVN_API(nvnCommandBufferUpdateUniformBuffer) {
 // Deferred forms too; MKW only calls the plain graphics form (stage 0 offset 0 size 16, title and race runs of
 // 15/11/2026), so a Deferred caller changing the data after the call would need a submit-time read like the
 // deferred binds above.
-static void push_const(Cpu *c) {
+// Compute's constants are kept as stage 5 (NVN_STAGE_CS, vk_draw_internal.h) whatever stage the game passes: MKW's
+// photo mode pushes them with stage 0 (ph8, 16/11/2026: "PushComputeConstants stage 0 offset 0 size 32"), which as
+// the vertex stage reached no compute program. The replay puts them in the dispatch's c0 (vk_exec_bind.c c0_info).
+#define PUSH_STAGE_CS 5
+static void push_const(Cpu *c, int compute) {
     uint64_t off = arg_x(c, 2), n = arg_x(c, 3);
     if (off >= NVN_C24_BYTES) return;
     if (n > NVN_C24_BYTES - off) n = NVN_C24_BYTES - off;
     p_push_const *r = cmd_rec(cmd_of(c), OP_PUSH_CONST, offsetof(p_push_const, data) + n);
-    r->stage = (int32_t)(arg_x(c, 1) & 7);
+    r->stage = compute ? PUSH_STAGE_CS : (int32_t)(arg_x(c, 1) & 7);
     r->offset = (int32_t)off;
     r->size = (int32_t)n;
     r->pad_ = 0;
     memcpy(r->data, arg_p(c, 4), n);
 }
-NVN_API(nvnCommandBufferPushGraphicsConstants) { push_const(c); }
-NVN_API(nvnCommandBufferPushGraphicsConstantsDeferred) { push_const(c); }
-NVN_API(nvnCommandBufferPushComputeConstants) { push_const(c); }
-NVN_API(nvnCommandBufferPushComputeConstantsDeferred) { push_const(c); }
+NVN_API(nvnCommandBufferPushGraphicsConstants) { push_const(c, 0); }
+NVN_API(nvnCommandBufferPushGraphicsConstantsDeferred) { push_const(c, 0); }
+NVN_API(nvnCommandBufferPushComputeConstants) { push_const(c, 1); }
+NVN_API(nvnCommandBufferPushComputeConstantsDeferred) { push_const(c, 1); }
 
 // ---------- submit
 // What the console reads at the submit call is read here, on the game thread: every handle must be a live recording,

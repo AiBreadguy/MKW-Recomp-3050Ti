@@ -148,7 +148,13 @@ static int c0_on(void) {   // MKW_FIX_C0=0: c0 reads zeros instead of the driver
     return on;
 }
 
+static int c24_on(void);
+
 // c0 from replay scratch; a bank equal to the stage's previous one reuses its range, so it costs no copy.
+// An NVN2 compute program reads its pushed constants in c0 from byte 0x10, as many words as its control section says
+// (+0xa9, gfx_shader.c cs_res), before its resource table: there they go (OP_PUSH_CONST of stage NVN_STAGE_CS). The
+// photo mode's 1.5x scale of the picture to 3840x2160 (cs 07a03741f7478a83) clamps and offsets its reads by them;
+// with zeros it wrote black and photo mode showed a black screen (issue #384; ph8, 1440 lines, 16/11/2026).
 static VkDescriptorBufferInfo c0_info(VkExec *ex, int st) {
     int k = st == NVN_STAGE_VS ? 0 : st == NVN_STAGE_FS ? 1 : 2;
     // vk_c0_fill reads the storage slots, and the uniform slots and dispatch size for compute or the base instance for
@@ -162,6 +168,7 @@ static VkDescriptorBufferInfo c0_info(VkExec *ex, int st) {
         if ((table = gfx_shader_cs_table(c0_cs))) {   // NVN2 packed table: its handles are part of the bank
             memcpy(in.table, table, 5);
             memcpy(in.tex, ex->tex[st], sizeof in.tex), memcpy(in.img, ex->img[st], sizeof in.img);
+            if (c24_on()) memcpy(in.pc, ex->c24[st], sizeof in.pc);
         }
     } else {
         in.binst = c0_binst;
@@ -171,6 +178,11 @@ static VkDescriptorBufferInfo c0_info(VkExec *ex, int st) {
     B.c0_in[k] = in;
     uint8_t tmp[VK_C0_BYTES];
     vk_c0_fill(tmp, st, ex->ssbo[st], ex->ubo[st], c0_dim, c0_binst, table, ex->tex[st], ex->img[st]);
+    if (table) {   // the pushed constants, before the table vk_c0_fill wrote past them
+        uint32_t n = 4u * table[4];
+        if (n > NVN_C24_BYTES) n = NVN_C24_BYTES;
+        if (0x10 + n <= VK_C0_BYTES) memcpy(tmp + 0x10, in.pc, n);
+    }
     if (!B.c0_valid[k] || memcmp(tmp, B.c0[k], VK_C0_BYTES)) {
         memcpy(scratch(ex, VK_C0_BYTES, &B.c0_buf[k], &B.c0_off[k]), tmp, VK_C0_BYTES);
         memcpy(B.c0[k], tmp, VK_C0_BYTES);
