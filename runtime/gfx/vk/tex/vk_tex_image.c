@@ -367,6 +367,21 @@ void vk_tex_pool_start(void) {
     int blocks = e && *e ? atoi(e)
                          : (int)vk_default_tex_pool_blocks(
                                c->props.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU, vram >> 20);
+    // The default uses physical VRAM. This opt-in experiment instead caps preallocation
+    // to half the current dedicated budget; manual pool sizes always take priority.
+    const char *budgeted = cfg_get("MKW_TEX_POOL_BUDGETED");
+    if (!(e && *e) && budgeted && atoi(budgeted)) {
+        uint64_t used = 0, budget = 0;
+        int exact = 0;
+        if (vk_mem_vram(&used, &budget, &exact) && exact && budget) {
+            int cap = (int)vk_budgeted_tex_pool_blocks(1, vram >> 20, budget >> 20);
+            if (cap < blocks) {
+                rt_log("vk: texture pool: budget-aware cap %d -> %d blocks (driver budget %.0f MiB; "
+                       "MKW_TEX_POOL_BUDGETED=1)", blocks, cap, budget / 1048576.0);
+                blocks = cap;
+            }
+        }
+    }
     if (blocks <= 0) return;
     tex_pool_thread = plat_thread_new(tex_pool_main, (void *)(intptr_t)blocks, "vk tex pool");
     if (!tex_pool_thread) rt_log("vk: texture pool: no thread");

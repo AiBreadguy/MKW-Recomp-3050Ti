@@ -47,3 +47,10 @@ This is a **measurement plan**, not a claim that any optimization has already be
 First: stable 30 FPS at normal game speed without reduced visual quality relative to the chosen baseline. Stretch: better frame pacing and higher real FPS, eventually testing 60 FPS where feasible.
 
 **Repository hygiene:** Never commit game files, keys, generated game code or shaders, player screenshots, or personal paths from raw logs. Keep licensed upstream attribution intact. Mark unmeasured claims as hypotheses.
+
+## Two experimental code changes (not yet bench-tested on the laptop)
+
+- `MKW_DRAW_CACHE=1`: fast descriptor-key hashing for the existing experimental draw cache. Exact descriptor comparisons still guard every hit. The standalone C test passes; FPS improvement has not been established.
+- `MKW_TEX_POOL_BUDGETED=1`: shrink the pool's **preallocation** on 4-GB cards when the driver's exact VRAM budget is smaller than the physical heap. Leaves the default unchanged, leaves explicit `MKW_VK_TEX_POOL_MIN` unchanged. Could reduce paging; could also make texture allocation stutter worse. Requires a controlled A/B test.
+
+Use the same race scene, identical settings, and `MKW_VRAM_LOG=300`. Compare real game frame time, p95 stutters, speed and memory usage. Revert the experiment if it harms correctness.
