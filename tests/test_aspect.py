@@ -43,7 +43,7 @@ static float aspect_scale;
 static volatile uint64_t split_at;
 static uint64_t frame_step_ticks(void) { return 1; }
 static uint64_t rt_main_addr(uint64_t offset) { return 0x7000000000ull + offset; }
-static struct { int number; const char *display; } version;
+static struct { int number; const char *display; uint64_t aspect_first_lr; uint8_t fov_entry_x, fov_half_v; } version;
 static const char *cfg_value(const char *key) { (void)key; return choice; }
 static void gfx_window_shape(int *w, int *h) { *w = width; *h = height; }
 #define rt_version() (&version)
@@ -56,6 +56,7 @@ static void rt_log(const char *fmt, ...) { (void)fmt; }
 int main(int argc, char **argv) {
     if (argc != 6 && argc != 9) return 2;
     choice = argv[1]; width = atoi(argv[2]); height = atoi(argv[3]); version.number = atoi(argv[4]);
+    version.aspect_first_lr = version.number == 100 ? 0x460d44 : version.number == 180 ? 0x8a6d8 : 0;
     float a = aspect_of(), scale = a ? a / (16.0f / 9) : 1;
     float fov[4] = {strtof(argv[5], 0), 0, 0, 0};
     if (argc == 9) {
@@ -65,7 +66,7 @@ int main(int argc, char **argv) {
         fields[1] = sinf(fields[0] / 2); fields[2] = cosf(fields[0] / 2); fields[3] = tanf(fields[0] / 2);
         Cpu c = {0};
         int second = atoi(argv[6]);
-        c.x[30] = rt_main_addr(second ? 0x460e00 : 0x460d44);
+        c.x[30] = rt_main_addr(second ? 0x460e00 : version.aspect_first_lr);
         c.x[second ? 11 : 8] = (uint64_t)(uintptr_t)projection;
         aspect_scale = scale;
         float w = strtof(argv[7], 0), h = strtof(argv[8], 0), result;
@@ -148,8 +149,12 @@ def test_wide_keeps_existing_hor_plus(aspect, choice, w, h):
     assert my == pytest.approx(16 / 9) and ty == 0.5
 
 
-def test_180_keeps_letterboxing_until_its_fov_layout_is_verified(aspect):
-    assert run(aspect, "window", 2448, 1848, version=180)[0] == 0
+def test_180_fits_tall_window_too(aspect):
+    assert run(aspect, "window", 2448, 1848, version=180)[0] == pytest.approx(2448 / 1848)
+
+
+def test_version_without_fov_site_keeps_letterboxing(aspect):
+    assert run(aspect, "window", 2448, 1848, version=999)[0] == 0
 
 
 @pytest.mark.parametrize("w,h", [(0, 1848), (2448, 0), (-1, 1848)])

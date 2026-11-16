@@ -176,7 +176,7 @@ static void shadow_set(const RtGame *g) {
 }
 
 // The aspect set: MKW_ASPECT (Screen tab) wider than 16:9 shows more at the sides (Hor+): 21:9, 32:9, 48:9 or the window's
-// own. Window also extends vertically below 16:9 on 1.0.0, whose FOV cache layout is verified. Each camera's aspect
+// own. Window also extends vertically below 16:9 (Vert+, set vertplus: the race FOV, version.c). Each camera's aspect
 // follows the output (host_aspect/output_size); the 2D layouts fit without stretching (host_ui_proj).
 static float aspect_out;     // the output's width / height; 0: 16:9, the set off
 static float aspect_scale;   // aspect_out / (16 / 9)
@@ -188,8 +188,8 @@ static float aspect_of(void) {
     else sscanf(a, "%d:%d", &w, &h);
     float r = w > 0 && h > 0 ? (float)w / (float)h : 0;
     if (!strcmp(a, "window") && r > 0 && r < 16.0f / 9) {
-        if (rt_version()->number == 100) return r;
-        rt_log("patches: tall Window needs the 1.0.0 FOV layout; keeping 16:9 on %s", rt_version()->display);
+        if (rt_version()->aspect_first_lr) return r;
+        rt_log("patches: tall Window has no FOV site on %s; keeping 16:9", rt_version()->display);
     }
     return r > 16.0f / 9 + 0.01f ? r : 0;
 }
@@ -215,7 +215,7 @@ static float aspect_widen(float w, float h) {
     return on ? aspect_scale : 1;
 }
 
-// The requested angle remains the source for all projection and frustum users. At 1.0.0 main+45fba4,
+// The requested angle remains the source for all projection and frustum users. At 1.0.0 main+45fba4 (1.8.0 894a4),
 // the race update has already stored aspect (460c10), but is about to replace the FOV and all three caches.
 // Change the fresh request before those writes, not the caches that the game immediately overwrites.
 static float aspect_fov_angle(float angle, float scale) {
@@ -225,15 +225,15 @@ static float aspect_fov_angle(float angle, float scale) {
 static void host_camera_fov(Cpu *c) {
     float angle, half;
     memcpy(&angle, &c->v[0], sizeof angle);
-    memcpy(&half, &c->v[13], sizeof half);
-    float a = *(float *)(uintptr_t)(c->x[24] + 0xb0);
-    if (rt_version()->number == 100 && aspect_scale > 0 && aspect_scale < 1 &&
+    memcpy(&half, &c->v[rt_version()->fov_half_v], sizeof half);
+    float a = *(float *)(uintptr_t)(c->x[rt_version()->fov_entry_x] + 0xb0);
+    if (aspect_scale > 0 && aspect_scale < 1 &&
         fabsf(a - (16.0f / 9) * aspect_scale) < 0.008f) {
         angle = aspect_fov_angle(angle, aspect_scale);
         c->v[0] = 0;
         memcpy(&c->v[0], &angle, sizeof angle);
     }
-    // Emulate the replaced fmul s8, s0, s13, including scalar upper-lane clearing.
+    // Emulate the replaced fmul s8, s0, s13 (s14 on 1.8.0), including scalar upper-lane clearing.
     half *= angle;
     c->v[8] = 0;
     memcpy(&c->v[8], &half, sizeof half);
@@ -246,7 +246,7 @@ static void host_aspect(Cpu *c) {
     float scale = aspect_widen(w, h);
     // Keep the first projection's 16:9 layout calibration. The second projection receives
     // the race camera's fresh corrected request at 45fba4. UI draw projections fit the 16:9 canvas separately.
-    if (scale < 1 && c->x[30] == rt_main_addr(0x460d44)) scale = 1;
+    if (scale < 1 && c->x[30] == rt_main_addr(rt_version()->aspect_first_lr)) scale = 1;
     float a = w / h * scale;
     c->v[0] = 0;
     memcpy(&c->v[0], &a, sizeof a);

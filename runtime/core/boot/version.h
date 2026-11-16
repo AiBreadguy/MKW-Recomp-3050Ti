@@ -36,6 +36,10 @@ typedef struct {
     uint64_t ui_text_lr;       // return address of the 2D text setup's projection getter call (set aspect)
     uint64_t ui_focus_fn;      // a menu button taking the cursor (seqwatch.c, MKW_UI_FOCUS)
     uint64_t camera_service;   // the global holding the camera service object (patches.c, set camera; 1.8.0)
+    uint64_t aspect_first_lr;  // return of the camera aspect's first fdiv (set aspect): its projection stays 16:9 when
+                               // tall; 0: tall Window is not offered (set vertplus)
+    uint8_t fov_entry_x, fov_half_v;   // at set vertplus's site: the x register of the camera entry being written and
+                                       // the v register of the replaced fmul's second operand
     RtRaceEvent race_events[RT_RACE_EVENTS];   // race_scene.c; none: 20 and 15 fps apply everywhere
     // sdk offsets: the NVN2 driver's proc table (tools/gpu/nvn2_procs.py TABLES, the same rows)
     uint64_t sdk_name_pool, sdk_name_offsets, sdk_pointers;

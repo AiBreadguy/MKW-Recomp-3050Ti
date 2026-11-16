@@ -17,7 +17,7 @@ def gate(tmp_path_factory):
 #include "core/boot/gamelib.h"
 static int width, height;
 static float aspect_out, aspect_scale;
-static struct { int number; const char *display; } version = {100, "1.0.0"};
+static struct { int number; const char *display; uint64_t aspect_first_lr; } version = {100, "1.0.0", 0x460d44};
 #define rt_version() (&version)
 static const char *cfg_value(const char *key) { (void)key; return "window"; }
 static void gfx_window_shape(int *w, int *h) { *w = width; *h = height; }
@@ -29,6 +29,7 @@ static void rt_log(const char *fmt, ...) { (void)fmt; }
 int main(int argc, char **argv) {
     if (argc != 5) return 2;
     version.number = atoi(argv[4]);
+    version.aspect_first_lr = version.number == 100 ? 0x460d44 : version.number == 180 ? 0x8a6d8 : 0;   // version.c
     width = atoi(argv[1]); height = atoi(argv[2]);
     RtPatchSet sets[] = {{"aspect", "MKW_ASPECT_PATCH", 0}, {"vertplus", "MKW_VERTPLUS_PATCH", 0}};
     uint8_t on[RT_MAX_PATCH_SETS] = {0};
@@ -67,7 +68,9 @@ int main(int argc, char **argv) {
         (2560, 1080, 1, 100, [2560 / 1080, 1, 0]),
         (2560, 1080, 0, 100, [2560 / 1080, 1, 0]),
         (2448, 1848, 2, 100, [0, 0, 0]),
-        (2448, 1848, 1, 180, [0, 0, 0]),
+        (2448, 1848, 1, 180, [2448 / 1848, 1, 1]),
+        (2448, 1848, 0, 180, [0, 0, 0]),
+        (2448, 1848, 1, 999, [0, 0, 0]),
         (2560, 1080, 1, 180, [2560 / 1080, 1, 0]),
     ],
 )
