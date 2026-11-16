@@ -71,6 +71,7 @@ static const RtVersion versions[] = {
         .number = 180,
         .display = "1.8.0",
         .output_lines = 2160,
+        .final_at_screen = 1,
         .nvn_ret = 0xdd07cc,
         .frame_update = 0x69cbb0,
         .frame_slot = 0x367aac0,

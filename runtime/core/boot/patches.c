@@ -402,7 +402,11 @@ static void aspect_tall_target(uint32_t wh[2], int lines, float aspect, int nati
 static void output_size(const RtGame *g) {
     const char *res = cfg_value("MKW_RESOLUTION"), *off = cfg_get("MKW_OUTPUT_PATCH");
     int lines = strcmp(res, "original") ? atoi(res) : 0, native = rt_version()->output_lines;
-    if (!lines) {
+    // 1.8.0 draws its last pass at the screen render's size (2560x1440 at original) whatever the output: an output
+    // with fewer lines cuts the picture to its top-left corner (pr450-180b/d, vp 2560x1440 on a 1280x800 texture).
+    // Its output keeps at least those lines, 16:9; the present stretches the crop to MKW_ASPECT (gfx_present.c).
+    int at_screen = rt_version()->final_at_screen;
+    if (!lines && !at_screen) {
         // the lines the picture gets in the window: fewer than the window's when it is narrower than the picture and
         // the present letterboxes it (gfx_fit_rect, MKW_PICTURE_FIT=keep). A 16:9 picture on the Steam Deck's
         // 1280x800 gets 720, and an output of 800 lines (1422x800, 1.23 times the pixels) was shrunk to them.
@@ -413,16 +417,17 @@ static void output_size(const RtGame *g) {
             if (h >= 360 && h < native) lines = h;
         }
     }
-    if (!lines && aspect_out) lines = 1440;
+    if (!lines && aspect_out && !(at_screen && aspect_scale < 1)) lines = 1440;
     for (int i = 0; i < g->npatch_sets; i++) {
         if (strcmp(g->patch_sets[i].name, "output")) continue;
         if (lines <= 0 || (off && !strcmp(off, "0"))) {
             g->patch_on[i] = 0;   // the page holds no size: the site would read 0x0
             return;
         }
-        uint32_t wide = aspect_out ? ((uint32_t)(lines * aspect_out + 0.5f) + 1) & ~1u : 0;
+        int tall_at_screen = at_screen && aspect_out > 0 && aspect_scale < 1;   // 16:9 at the lines
+        uint32_t wide = aspect_out && !tall_at_screen ? ((uint32_t)(lines * aspect_out + 0.5f) + 1) & ~1u : 0;
         uint32_t wh[2] = {wide ? wide : (uint32_t)(lines * 16 / 9), (uint32_t)lines};
-        if (aspect_out > 0 && aspect_scale < 1) {
+        if (aspect_out > 0 && aspect_scale < 1 && !at_screen) {
             int w = 0, h = 0;
             if (!strcmp(res, "original")) gfx_window_shape(&w, &h);
             aspect_tall_target(wh, lines, aspect_out, w, h);

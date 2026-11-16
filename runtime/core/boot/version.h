@@ -20,6 +20,9 @@ typedef struct {
     int number;                // RtGame.version: 100, 180
     const char *display;       // as the game shows it (nn::oe::GetDisplayVersion): "1.0.0"
     int output_lines;          // the output height GraphicsSystem fixes in code at 16:9 (set output): 1440, 2160
+    int final_at_screen;       // 1: the last pass draws the picture at the screen render's size into the window
+                               // texture's corner and the window crop says that size (1.8.0: 2560x1440 in a 3840x2160
+                               // output, the console's display scales the crop); 0: scaled to the whole output (1.0.0)
     // main offsets
     uint64_t nvn_ret;          // return address of the first nvnBootstrapLoader call (boot.c checkpoint)
     uint64_t frame_update;     // the frame object's per-frame virtual (game.c, MKW_FPS)
