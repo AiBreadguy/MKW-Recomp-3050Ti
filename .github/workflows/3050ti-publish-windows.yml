@@ -1,0 +1,103 @@
+name: Publish 3050 Ti Windows previews
+
+# Maintainer-only, single-use initial publishing of two GitHub Actions Windows packages.
+# Only compiled runtime/setup code, never Nintendo game files or extracted game content.
+# Tags deliberately do not start with v: upstream's release.yml responds to v* tags.
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/3050ti-publish-windows.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  windows-previews:
+    if: github.repository == 'AiBreadguy/MKW-Recomp-3050Ti'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - tag: 3050ti-win-preview-1
+            title: 'MKW Recomp 3050 Ti - Windows Preview 1'
+            run_id: 43917926279
+            sha: 5cfc87d8d9c30f0da6876c47fab502b96921fee7
+            asset: mkw-recomp-0.1.12-3050ti-5cfc87d-windows-x64.zip
+          - tag: 3050ti-win-preview-2
+            title: 'MKW Recomp 3050 Ti - Windows Preview 2 (Free VRAM)'
+            run_id: 43923013304
+            sha: 76918901c5a9f51b12564dbf7bc17436a7c3fb8a
+            asset: mkw-recomp-0.1.12-3050ti-7691890-windows-x64.zip
+    steps:
+      - name: Confirm the build succeeded and matches the intended commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ matrix.run_id }}
+          SHA: ${{ matrix.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          result="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RUN_ID" --jq '.head_sha + " " + (.conclusion // "")')"
+          read -r got_sha got_conclusion <<< "$result"
+          test "$got_sha" = "$SHA"
+          test "$got_conclusion" = "success"
+
+      - name: Download and inspect complete Windows package
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ matrix.run_id }}
+          ASSET: ${{ matrix.asset }}
+          TAG: ${{ matrix.tag }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts
+          gh run download "$RUN_ID" --repo "$GITHUB_REPOSITORY" --name MKW-Recomp-3050Ti-Windows --dir artifacts
+          test -f "artifacts/$ASSET"
+          unzip -t "artifacts/$ASSET" > /dev/null
+          unzip -Z1 "artifacts/$ASSET" | grep -Fx 'mkw-recomp/mkw.exe' > /dev/null
+          unzip -Z1 "artifacts/$ASSET" | grep -Fx 'mkw-recomp/SDL3.dll' > /dev/null
+          unzip -Z1 "artifacts/$ASSET" | grep -Fx 'mkw-recomp/setup/src/tools/prepare/update.py' > /dev/null
+          if [ "$TAG" = '3050ti-win-preview-2' ]; then
+            unzip -p "artifacts/$ASSET" mkw-recomp/setup/src/tools/prepare/update.py | grep -F 'AiBreadguy/MKW-Recomp-3050Ti' > /dev/null
+          fi
+
+      - name: Publish verified ZIP as an experimental GitHub prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ matrix.run_id }}
+          SHA: ${{ matrix.sha }}
+          ASSET: ${{ matrix.asset }}
+          TAG: ${{ matrix.tag }}
+          TITLE: ${{ matrix.title }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Release $TAG already exists; will not overwrite it."
+            exit 0
+          fi
+          {
+            printf '## Experimental Windows 64-bit portable build\n\n'
+            printf 'Built from fork source commit `%s` in GitHub Actions run [#%s](https://github.com/%s/actions/runs/%s).\n\n' "$SHA" "$RUN_ID" "$GITHUB_REPOSITORY" "$RUN_ID"
+            if [ "$TAG" = '3050ti-win-preview-1' ]; then
+              printf '### Changes\n- Optional faster cross-frame descriptor cache hashing (`MKW_DRAW_CACHE=1`).\n- Optional dedicated VRAM budget-aware texture pool (`MKW_TEX_POOL_BUDGETED=1`).\n- Portable Windows runtime, DLLs and setup tools.\n\n'
+              printf '**Note:** This older preview may still offer official upstream updates. Avoid accepting those updates during fork comparisons. Preview 2 is recommended.\n\n'
+            else
+              printf '### Changes\n- Includes Preview 1 experimental changes.\n- Optional texture-pool cap now considers driver budget **and VRAM already in use**.\n- Fork-specific updater points to this repository, not the original upstream releases.\n- Windows packaging and smoke-test improvements; A/B benchmark launcher available in the source branch.\n\n'
+            fi
+            printf '### Installation and limitations\n'
+            printf -- '- Download the Windows x64 ZIP below, extract it, then launch `mkw-recomp/mkw.exe`.\n'
+            printf -- '- No game files, keys or proprietary game assets are included; setup requires your own legally obtained game files.\n'
+            printf -- '- **Unverified in-game performance:** Windows compilation and game-free tests passed, but gameplay, graphics correctness and real FPS improvements on RTX 3050 Ti hardware have not been confirmed.\n'
+            printf -- '- These features are **off by default**. Test one at a time before comparing frame times.\n'
+            printf -- '- Keep a backup of any earlier working installation.\n'
+          } > release-notes.md
+          gh release create "$TAG" "artifacts/$ASSET" --repo "$GITHUB_REPOSITORY" \
+            --target "$SHA" --prerelease --latest=false --title "$TITLE" --notes-file release-notes.md
+          gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json url,isPrerelease,assets \
+            --jq '{url, isPrerelease, assets: [.assets[].name]}'
