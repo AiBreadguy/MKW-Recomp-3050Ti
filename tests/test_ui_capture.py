@@ -4,7 +4,7 @@ import subprocess
 
 import pytest
 
-from test_aspect import ROOT, function
+from test_aspect import LIBM, ROOT, function
 
 
 @pytest.fixture(scope="module")
@@ -48,13 +48,13 @@ int main(int argc, char **argv) {
             "-D_CRT_SECURE_NO_WARNINGS",  # Windows CI: the UCRT deprecates sscanf and friends
             "-I" + str(ROOT / "runtime"),
             str(root / "test.c"),
-            "-lm",
+            *LIBM,
             "-o",
-            str(root / "test"),
+            str(root / "test.exe"),
         ],
         check=True,
     )
-    return root / "test"
+    return root / "test.exe"
 
 
 @pytest.mark.parametrize("height", [1080, 954.8])
@@ -150,13 +150,13 @@ int main(int argc, char **argv) {
             "-D_CRT_SECURE_NO_WARNINGS",  # Windows CI: the UCRT deprecates sscanf and friends
             "-I" + str(ROOT / "runtime"),
             str(root / "test.c"),
-            "-lm",
+            *LIBM,
             "-o",
-            str(root / "test"),
+            str(root / "test.exe"),
         ],
         check=True,
     )
-    return root / "test"
+    return root / "test.exe"
 
 
 @pytest.mark.parametrize(

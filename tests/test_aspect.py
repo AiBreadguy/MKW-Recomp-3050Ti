@@ -4,6 +4,7 @@ The functions come from patches.c, so the fixture checks the implementation, not
 """
 
 import math
+import os
 import shutil
 import subprocess
 from pathlib import Path
@@ -11,6 +12,7 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
+LIBM = [] if os.name == "nt" else ["-lm"]  # Windows has no separate libm (LNK1181: cannot open m.lib)
 
 
 def function(source: str, name: str) -> str:
@@ -89,7 +91,7 @@ int main(int argc, char **argv) {
 """
     d = tmp_path_factory.mktemp("aspect")
     (d / "aspect.c").write_text(code)
-    exe = d / "aspect"
+    exe = d / "aspect.exe"
     subprocess.run(
         [
             cc,
@@ -100,7 +102,7 @@ int main(int argc, char **argv) {
             "-D_CRT_SECURE_NO_WARNINGS",  # Windows CI: the UCRT deprecates sscanf and friends
             "-I" + str(ROOT / "runtime"),
             str(d / "aspect.c"),
-            "-lm",
+            *LIBM,
             "-o",
             str(exe),
         ],

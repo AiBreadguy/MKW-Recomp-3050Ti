@@ -53,11 +53,11 @@ int main(int argc, char **argv) {
             "-I" + str(ROOT / "runtime/cpu"),
             str(out / "gate.c"),
             "-o",
-            str(out / "gate"),
+            str(out / "gate.exe"),
         ],
         check=True,
     )
-    return out / "gate"
+    return out / "gate.exe"
 
 
 @pytest.mark.parametrize(

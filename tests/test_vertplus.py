@@ -6,7 +6,7 @@ import subprocess
 
 import pytest
 
-from test_aspect import ROOT, function
+from test_aspect import LIBM, ROOT, function
 
 
 @pytest.fixture(scope="module")
@@ -64,13 +64,13 @@ int main(int argc, char **argv) {
             "-D_CRT_SECURE_NO_WARNINGS",  # Windows CI: the UCRT deprecates sscanf and friends
             "-I" + str(ROOT / "runtime"),
             str(out / "test.c"),
-            "-lm",
+            *LIBM,
             "-o",
-            str(out / "test"),
+            str(out / "test.exe"),
         ],
         check=True,
     )
-    return out / "test"
+    return out / "test.exe"
 
 
 @pytest.mark.parametrize("v180", [False, True])
