@@ -8,6 +8,7 @@
 #include "host.h"
 #include "vk.h"
 #include "vk_exec.h"
+#include "vk_dcache_hash.h"
 #include "platform/platform.h"
 
 #define MAX_DESC 1024   // as vk_exec_bind.c
@@ -176,9 +177,12 @@ VkDescriptorSet vk_dcache_get(VkDescriptorSetLayout sl, const VkDescSlot *d, uin
                               void (*write)(void *ctx, VkDescriptorSet set), void *ctx) {
     // By 64-bit words: byte by byte (FNV) a draw's ~20 descriptors cost ~0.4 us, more than the push they spare (dcp1:
     // sets and pushes 0.38 -> 0.8 us a draw with 98 % found).
-    uint64_t h = (uint64_t)(uintptr_t)sl * 0x9E3779B97F4A7C15ull;
+    // The full descriptor array is still memcmp'd on a hash match. One dependent multiply per descriptor
+    // instead of three saves recorder CPU in this optional cache path (MKW_DRAW_CACHE=1).
+    uint64_t h = vk_dcache_hash_start((uint64_t)(uintptr_t)sl, n);
     for (uint32_t i = 0; i < n; i++)
-        for (int j = 0; j < 3; j++) h = (h ^ d[i].w[j]) * 0xBF58476D1CE4E5B9ull, h ^= h >> 31;
+        h = vk_dcache_hash_step(h, d[i].w[0], d[i].w[1], d[i].w[2]);
+    h = vk_dcache_hash_finish(h);
     plat_mutex_lock(&DCH.lock);
     if (!DCH.tab) {
         uint64_t *hs = calloc(DC_HSLOTS, sizeof *hs);

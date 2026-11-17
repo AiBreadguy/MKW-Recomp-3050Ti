@@ -19,3 +19,6 @@ submits and fences, present.
 | `vk_latency.c` | `MKW_LATENCY=1` (diagnosis): controller read to the game's present, its display slot, the host presents and (with `VK_KHR_present_wait`, a visible window) the screen; a `latency:` line every 5 s; with `MKW_PROBE`, every frame event with its thread and time |
 | `vk_framegen.c` | Frame generation (`MKW_FRAMEGEN`): frames made between the game's from its last two (optical flow), on the present thread and the GPU; the present thread shows them evenly over the game's frame time; paused while a full-screen movie plays |
 | `vk_guard.c` | `MKW_GPU_GUARD=1`: stops with `rt_fatal` before submitting what would fault the GPU (an object destroyed or queued for destruction before the last part that names it, a bind skipped by a cache the command buffer does not have, a pushed buffer address of 0); `MKW_GPU_GUARD_TEST=bind\|free` commits one on purpose |
+
+
+The fork's opt-in `MKW_TEX_POOL_BUDGETED=1` caps preallocated texture blocks against the actual driver budget. Default unchanged; tests in `tests/test_defaults.py`.

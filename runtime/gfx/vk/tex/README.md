@@ -15,3 +15,6 @@ sparse and precomputed BC7.
 | `vk_astc.c` | ASTC on the GPU: decoded by compute and recompressed to BC7 (`MKW_ASTC_BC7`) |
 | `vk_sparse.c` | MKW's own: sparse textures as Vulkan sparse images, tiles bound at each `MapVirtual`; cube compatibility only for cube targets; private small-mip backing initialized separately from shared tiles and sparse resources released before allocator shutdown |
 | `vk_texpre.c` | MKW's own: BC7 of the ASTC textures encoded offline (`MKW_TEXPRE`, off) |
+
+
+Fork experiment: `MKW_TEX_POOL_BUDGETED=1` caps the startup texture pool to half the dedicated driver-reported budget in complete 256-MiB blocks (when available). Default OFF. Explicit `MKW_VK_TEX_POOL_MIN` overrides it. Test VRAM residency and stutters, not only average FPS.

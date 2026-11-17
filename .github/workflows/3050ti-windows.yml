@@ -1,0 +1,58 @@
+name: 3050 Ti Windows development build
+
+# Full portable Windows package from the source branch, not just mkw.exe.
+# Build only the runtime/launcher and setup tools. No game files, keys or generated game code.
+on:
+  push:
+    branches:
+      - dev/3050ti-baseline
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: 3050ti-windows-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  windows-portable:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    container: archlinux:latest
+    steps:
+      - name: Build dependencies
+        run: pacman -Syu --noconfirm --needed git ccache ninja cmake binutils uv python
+      - uses: actions/checkout@v7
+      - name: Trust checkout
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+      - uses: actions/cache@v6
+        with:
+          path: build/win
+          key: 3050ti-windeps-${{ hashFiles('tools/build/windeps.py') }}
+      - uses: actions/cache@v6
+        with:
+          path: build/dist/dl
+          key: 3050ti-dist-windows-${{ hashFiles('tools/build/dist.py') }}
+      - name: Check isolated C regression tests
+        run: uv run pytest tests/test_defaults.py tests/test_dcache_hash.py -q
+      - name: Fetch and verify Windows toolchain and libraries
+        run: uv run tools/build/windeps.py
+      - name: Compile Windows runtime and launcher (no game data)
+        run: uv run tools/build/build.py --target windows --dist --runtime-only
+      - name: Bundle all setup tools and Windows DLLs
+        run: uv run tools/build/dist.py --target windows
+      - name: Create portable Windows ZIP
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="0.1.12-3050ti-${GITHUB_SHA:0:7}"
+          uv run tools/build/release.py --target windows --version "$version"
+          ls -lh build/release/*-windows-x64.zip
+      - name: Publish complete portable ZIP as workflow artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: MKW-Recomp-3050Ti-Windows
+          path: build/release/*-windows-x64.zip
+          if-no-files-found: error
+          retention-days: 30
